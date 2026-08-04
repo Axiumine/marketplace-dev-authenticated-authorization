@@ -5,7 +5,9 @@ import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/aut
 import { makeOnboardingData } from '@axiumine/koa-utils/lib/makeOnboardingData'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
 import { tokenInfoShopOwner } from '@lib/auth/tokenInfoShopOwner.mjs'
+import { assertTier } from '@thedoctorweb_agency/marketplace-common/others/assertTier'
 import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
+import { TIER } from '@thedoctorweb_agency/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
 import { Next } from 'koa'
@@ -38,6 +40,13 @@ export const authenticatedAuthorizationHandler =
 		if (Object.keys(redSession).length !== 0) {
 			const redData = { ...redSession } // For safety, Redis return an object without the default Object.prototype  in its prototype chain.
 
+			// All seven services share one `REDIS_KEY` prefix, so a well-formed refresh session found
+			// under this key may have been minted for another tier. Refuse it here, before the _id is
+			// looked up in *this* tier's collection — that lookup used to be the only thing standing in
+			// the way, and it only ever failed by accident, when the foreign id happened not to exist.
+			// A session with no `tier` predates this check and is refused too: fail closed.
+			assertTier(redData.tier, TIER.shopOwner)
+
 			/***************************
 			 * get info for access_token
 			 */
@@ -55,7 +64,8 @@ export const authenticatedAuthorizationHandler =
 			// this BE only save data to Redis, so we prepare ctx.state.user for Redis
 			let tokenData: IRedisDataShopOwner = {
 				_id: uId,
-				email
+				email,
+				tier: TIER.shopOwner
 			}
 			if (step !== null) tokenData.onboardingStep = step
 

@@ -33,7 +33,7 @@ const keyRefresh = `test:refresh:${REFRESH}`
 
 function makeCtx() {
 	return {
-		state: { user: { _id: OID, email: 'owner@marketplace.test', refreshToken: OLD_REFRESH } },
+		state: { user: { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner', refreshToken: OLD_REFRESH } },
 		cookies: {},
 		request: { header: {} }
 	} as unknown as IContextAuthenticatedAuthorization
@@ -55,8 +55,10 @@ describe('refresh mutation', () => {
 
 		// The access session carries the user payload minus refreshToken — the resolver strips it so
 		// the refresh token is never readable from an access-token lookup.
-		expect(hSet).toHaveBeenCalledWith(keyAccess, { _id: OID, email: 'owner@marketplace.test' })
-		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID })
+		expect(hSet).toHaveBeenCalledWith(keyAccess, { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner' })
+		// The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
+		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
+		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner' })
 		expect(hSet).toHaveBeenCalledTimes(2)
 
 		expect(expire).toHaveBeenCalledWith(keyAccess, ACCESS_EXPIRY)
