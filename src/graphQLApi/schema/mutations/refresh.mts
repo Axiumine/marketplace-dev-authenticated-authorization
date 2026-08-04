@@ -28,10 +28,10 @@ export const refresh = {
 		// Stryker disable next-line BooleanLiteral: initial value is provably unobservable, see comment above
 		let status = false // default
 
-		// ha il refresh token, access token già scaduto
+		// holds the refresh token; the access token has already expired
 
 		// legge dal db le info da mettere nell'Access Token -
-		// per ora non serve xke ci prendiamo solo userId presente nell'attuale refresh token
+		// not needed for now: only the userId carried by the current refresh token is read
 
 		// genera i 2 nuovi token
 		let accessToken = generateAccessToken()
@@ -61,7 +61,7 @@ export const refresh = {
 
 			setLoginCookies(ctx, refreshToken)
 
-			// elimina refresh token usato per fare questa chiamata
+			// delete the refresh token this call was made with
 			await redisClient.del(`${process.env.REDIS_KEY}${oldRefresh}`)
 
 			status = true

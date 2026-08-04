@@ -67,7 +67,7 @@ mutation gates stay.
 
 Unlike the logout service, this one opens **both** datasources (`Promise.all([RedisConnect(),
 MongoDBConnect()])`), because the refresh gate reads the session from Redis and then loads the
-`imprenditore` from MongoDB. The integration project uses the `REDIS_*` / `MONGODB_URI` values
+`shopOwner` from MongoDB. The integration project uses the `REDIS_*` / `MONGODB_URI` values
 from `.env` (loaded by the sources' own `dotenv.config()`). It overrides only the keyspace prefix
 (`REDIS_KEY=marketplaceDev:itest:authenticatedAuthorization:`, a per-service, ACL-allowed namespace —
 the `marketplaceDev:itest:` stem is shared across the platform because the Redis ACL grants the test
@@ -82,7 +82,7 @@ booted and really talked to both, not that a mock returned the expected value.
 
 **The integration suite never writes to MongoDB.** It seeds and deletes its own Redis keys inside
 the isolated namespace, and reaches MongoDB only through reads that are expected to miss (a
-session pointing at an `_id` that matches no imprenditore). Seeding a real `imprenditore` would
+session pointing at an `_id` that matches no shopOwner). Seeding a real `shopOwner` would
 mean writing to the dev database and satisfying its full `$jsonSchema` validator; the happy path
 of the `refresh` resolver is covered by the unit project instead.
 

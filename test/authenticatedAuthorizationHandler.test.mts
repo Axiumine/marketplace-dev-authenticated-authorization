@@ -5,12 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContextAuthenticatedAuthorization.mts'
 
 const hGetAll = vi.fn()
-const tokenInfoImprenditore = vi.fn()
+const tokenInfoShopOwner = vi.fn()
 const makeOnboardingData = vi.fn()
 
 vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGetAll } }))
 vi.mock('@axiumine/koa-utils/lib/makeOnboardingData', () => ({ makeOnboardingData }))
-vi.mock('@lib/auth/tokenInfoImprenditore.mjs', () => ({ tokenInfoImprenditore }))
+vi.mock('@lib/auth/tokenInfoShopOwner.mjs', () => ({ tokenInfoShopOwner }))
 
 const { authenticatedAuthorizationHandler } = await import('../src/lib/auth/authenticatedAuthorizationHandler.mts')
 
@@ -38,7 +38,7 @@ describe('authenticatedAuthorizationHandler', () => {
 
 	beforeEach(() => {
 		hGetAll.mockReset()
-		tokenInfoImprenditore.mockReset()
+		tokenInfoShopOwner.mockReset()
 		makeOnboardingData.mockReset().mockReturnValue(null)
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
 	})
@@ -58,9 +58,9 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(hGetAll).not.toHaveBeenCalled()
 	})
 
-	it('builds state.user from the Redis session and the imprenditore record', async () => {
+	it('builds state.user from the Redis session and the shopOwner record', async () => {
 		hGetAll.mockResolvedValueOnce(redisSession())
-		tokenInfoImprenditore.mockResolvedValueOnce({ login: { email: 'owner@marketplace.test' } })
+		tokenInfoShopOwner.mockResolvedValueOnce({ login: { email: 'owner@marketplace.test' } })
 
 		const ctx = makeCtx({ cookie: signedCookie() })
 
@@ -68,7 +68,7 @@ describe('authenticatedAuthorizationHandler', () => {
 
 		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(`test:refresh:${REFRESH}`)
 		// The id string is turned into an ObjectId before the lookup.
-		expect(String(tokenInfoImprenditore.mock.calls[0][0])).toBe(OID)
+		expect(String(tokenInfoShopOwner.mock.calls[0][0])).toBe(OID)
 		expect(ctx.state.user).toEqual({
 			_id: OID,
 			email: 'owner@marketplace.test',
@@ -77,9 +77,9 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(next).toHaveBeenCalledTimes(1)
 	})
 
-	it('carries onboardingStep when the imprenditore is still onboarding', async () => {
+	it('carries onboardingStep when the shopOwner is still onboarding', async () => {
 		hGetAll.mockResolvedValueOnce(redisSession())
-		tokenInfoImprenditore.mockResolvedValueOnce({ login: { email: 'owner@marketplace.test' } })
+		tokenInfoShopOwner.mockResolvedValueOnce({ login: { email: 'owner@marketplace.test' } })
 		makeOnboardingData.mockReturnValueOnce(2)
 
 		const ctx = makeCtx({ cookie: signedCookie() })
@@ -93,9 +93,9 @@ describe('authenticatedAuthorizationHandler', () => {
 		})
 	})
 
-	it('propagates the rejection when the imprenditore is disabled, deleted or gone', async () => {
+	it('propagates the rejection when the shopOwner is disabled, deleted or gone', async () => {
 		hGetAll.mockResolvedValueOnce(redisSession())
-		tokenInfoImprenditore.mockRejectedValueOnce(new Error('unauthorized'))
+		tokenInfoShopOwner.mockRejectedValueOnce(new Error('unauthorized'))
 
 		const ctx = makeCtx({ cookie: signedCookie() })
 
@@ -109,7 +109,7 @@ describe('authenticatedAuthorizationHandler', () => {
 		const ctx = makeCtx({ cookie: signedCookie() })
 
 		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
-		expect(tokenInfoImprenditore).not.toHaveBeenCalled()
+		expect(tokenInfoShopOwner).not.toHaveBeenCalled()
 		expect(next).not.toHaveBeenCalled()
 	})
 
@@ -119,7 +119,7 @@ describe('authenticatedAuthorizationHandler', () => {
 		const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })
 
 		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).resolves.toBe('next')
-		expect(tokenInfoImprenditore).not.toHaveBeenCalled()
+		expect(tokenInfoShopOwner).not.toHaveBeenCalled()
 		expect(ctx.state.user).toBeUndefined()
 		expect(next).toHaveBeenCalledTimes(1)
 	})

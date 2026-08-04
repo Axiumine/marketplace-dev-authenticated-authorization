@@ -4,8 +4,8 @@ import { throwRefreshTokenExpiredOrDeleted } from '@axiumine/koa-utils/graphQL/t
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
 import { makeOnboardingData } from '@axiumine/koa-utils/lib/makeOnboardingData'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
-import { tokenInfoImprenditore } from '@lib/auth/tokenInfoImprenditore.mjs'
-import { IRedisDataImprenditore } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataImprenditore'
+import { tokenInfoShopOwner } from '@lib/auth/tokenInfoShopOwner.mjs'
+import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
 import { Next } from 'koa'
@@ -14,7 +14,7 @@ import { Types } from 'mongoose'
 dotenv.config()
 
 /******************
- * riceve il token di refresh che possiede solo _id dell'utente, non tutte le info salvate nell'access token !
+ * receives the refresh token, which carries only the user's _id — not everything the access token holds!
  */
 
 export const authenticatedAuthorizationHandler =
@@ -24,7 +24,7 @@ export const authenticatedAuthorizationHandler =
 		/***************************
 		 * CLIENT: Invia opaque token
 		 * - in authorization: ctx.request.header.authorization =  'Bearer TOKEN_HERE
-		 * - in cookie: ctx.request.header.cookie = nome_cookie=TOKEN_HERE
+		 * - in cookie: ctx.request.header.cookie = firstName_cookie=TOKEN_HERE
 		 */
 		/*
     console.debug('[authorizationAuthApiHandlerWt]')
@@ -44,16 +44,16 @@ export const authenticatedAuthorizationHandler =
 			const uId = redData._id
 			const uIdObj = new Types.ObjectId(uId) as Types.ObjectId
 
-			const utente = await tokenInfoImprenditore(uIdObj)
+			const user = await tokenInfoShopOwner(uIdObj)
 
 			let step
 			let email
 
-			step = makeOnboardingData(utente.login)
-			email = utente.login.email
+			step = makeOnboardingData(user.login)
+			email = user.login.email
 
 			// this BE only save data to Redis, so we prepare ctx.state.user for Redis
-			let tokenData: IRedisDataImprenditore = {
+			let tokenData: IRedisDataShopOwner = {
 				_id: uId,
 				email
 			}

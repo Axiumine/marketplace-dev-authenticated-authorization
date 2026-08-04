@@ -1,14 +1,14 @@
 import { TCommonHeaders } from '@axiumine/koa-utils/graphQL/schema/context/TCommonHeaders'
 import { ICookies } from '@axiumine/koa-utils/lib/ICookies'
-import { IRedisDataImprenditore } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataImprenditore'
+import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
 import { IncomingHttpHeaders } from 'http'
 
-interface IRedisDataImprenditoreForNode extends IRedisDataImprenditore {
+interface IRedisDataShopOwnerForNode extends IRedisDataShopOwner {
 	refreshToken: string
 }
 
 type IStateApi = {
-	user: IRedisDataImprenditoreForNode
+	user: IRedisDataShopOwnerForNode
 }
 export type IContextAuthenticatedAuthorization = {
 	state: IStateApi

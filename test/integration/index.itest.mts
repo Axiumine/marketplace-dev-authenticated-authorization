@@ -71,7 +71,7 @@ async function gql(query: string, headers: Record<string, string> = {}) {
 
 /****************************************************************************************
  * Seeds. The rotation tests need the handler's MongoDB lookup to succeed, so they write a
- * real imprenditore to the dev database. Every document carries an `itest-…@marketplace.invalid`
+ * real shopOwner to the dev database. Every document carries an `itest-…@marketplace.invalid`
  * address and is deleted again in afterAll, as is every session key they leave on the cluster.
  ****************************************************************************************/
 
@@ -94,7 +94,7 @@ function track(key: string) {
  * Inserted with the raw driver rather than the Mongoose model, the platform seeding convention:
  * the insert is then shaped by the collection's own `$jsonSchema` and by nothing else, so a seed
  * cannot inherit whatever the model happens to believe today. That is not hypothetical — the model
- * used to spell `anagrafica.nascita.data` as `date` and carry no `contatti` path at all, both of
+ * used to spell `personalData.birth.date` as `date` and carry no `contacts` path at all, both of
  * which the validator refuses under `additionalProperties: false`, so a model write failed outright
  * (fixed in marketplace-common 1.17.0). The raw path was never affected, and will not be by the next
  * drift either.
@@ -104,23 +104,23 @@ function track(key: string) {
  * `checkUserAuthorizationDisDel` (marketplace-common, unmocked) runs against real data instead of a
  * fixture object.
  */
-async function seedImprenditore(login: Record<string, unknown> = {}, top: Record<string, unknown> = {}) {
+async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<string, unknown> = {}) {
 	const email = `itest-${randomUUID()}@marketplace.invalid`
 	const _id = new mongoose.Types.ObjectId()
 
 	await db()
-		.collection('imprenditore')
+		.collection('shopOwner')
 		.insertOne({
 			_id,
 			login: { email, password: PASSWORD_HASH, ...login },
-			anagrafica: {
-				nome: 'Itest',
-				cognome: 'Imprenditore',
-				nascita: { data: new Date('1980-01-01T00:00:00Z') },
-				indirizzo: { indirizzo: 'Via Test 1', cap: '24031', comune: 'Almenno San Salvatore', provincia: 'BG' },
-				contatti: { cellulare: '3900000000', email }
+			personalData: {
+				firstName: 'Itest',
+				lastName: 'ShopOwner',
+				birth: { date: new Date('1980-01-01T00:00:00Z') },
+				address: { street: 'Via Test 1', postalCode: '24031', city: 'Almenno San Salvatore', province: 'BG' },
+				contacts: { mobile: '3900000000', email }
 			},
-			iscrizione: new Date(),
+			registeredAt: new Date(),
 			...top
 		})
 	seededIds.push(_id)
@@ -128,7 +128,7 @@ async function seedImprenditore(login: Record<string, unknown> = {}, top: Record
 	return { _id, email }
 }
 
-/** Register a session key and point it at a seeded imprenditore, the way a real login would. */
+/** Register a session key and point it at a seeded shopOwner, the way a real login would. */
 async function seedSession(_id: mongoose.Types.ObjectId) {
 	const refresh = randomUUID()
 	const refreshKey = track(`${REDIS_KEY}refresh:${refresh}`)
@@ -173,7 +173,7 @@ afterAll(async () => {
 	// Drop whatever this run created while the handles are still open: documents first, then
 	// any session key. One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
 	for (const _id of seededIds) {
-		await drainSafely(`imprenditore ${_id.toString()}`, () => db().collection('imprenditore').deleteOne({ _id }))
+		await drainSafely(`shopOwner ${_id.toString()}`, () => db().collection('shopOwner').deleteOne({ _id }))
 	}
 	for (const key of seededKeys) {
 		await drainSafely(key, () => redisClient.del(key))
@@ -252,9 +252,9 @@ describe('refresh-cookie gate over HTTP', () => {
 	})
 
 	// The session really exists on the cluster, so the request gets past Redis and dies in MongoDB:
-	// the _id it points at matches no imprenditore. This is the one case that exercises both
+	// the _id it points at matches no shopOwner. This is the one case that exercises both
 	// datasources in a single request, which no unit test can do.
-	it('answers 401 when the live session points at an imprenditore MongoDB does not have', async () => {
+	it('answers 401 when the live session points at an shopOwner MongoDB does not have', async () => {
 		const refresh = randomUUID()
 		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
 		await redisClient.hSet(refreshKey, '_id', new mongoose.Types.ObjectId().toHexString())
@@ -270,13 +270,13 @@ describe('refresh-cookie gate over HTTP', () => {
 	})
 })
 
-// The imprenditore-missing case above proves the Mongo round-trip on a miss. These prove it on a
+// The shopOwner-missing case above proves the Mongo round-trip on a miss. These prove it on a
 // hit: a real document exists, and checkUserAuthorizationDisDel (marketplace-common, unmocked here)
 // runs against its real deleted/disabled/waitApprov fields rather than a fixture object built by
 // hand. Only the raw driver can put a document in each of these states past the real validator.
-describe('imprenditore state gates against the real collection', () => {
-	it('answers 401 when the live session points at an imprenditore that was deleted', async () => {
-		const { _id } = await seedImprenditore({}, { deleted: new Date() })
+describe('shopOwner state gates against the real collection', () => {
+	it('answers 401 when the live session points at an shopOwner that was deleted', async () => {
+		const { _id } = await seedShopOwner({}, { deleted: new Date() })
 		const refresh = await seedSession(_id)
 
 		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
@@ -285,8 +285,8 @@ describe('imprenditore state gates against the real collection', () => {
 		expect(json.message).toBe('Unauthorized')
 	})
 
-	it('answers 401 when the live session points at an imprenditore that is disabled', async () => {
-		const { _id } = await seedImprenditore({}, { disabled: true })
+	it('answers 401 when the live session points at an shopOwner that is disabled', async () => {
+		const { _id } = await seedShopOwner({}, { disabled: true })
 		const refresh = await seedSession(_id)
 
 		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
@@ -300,8 +300,8 @@ describe('imprenditore state gates against the real collection', () => {
 	// Proving that requires a real waitApprov:true document reaching the real gate function and
 	// coming back through: a mock of checkUserAuthorizationDisDel could not tell us whether the
 	// real one looks at the field or not.
-	it('does not gate on waitApprov: a live session for an imprenditore awaiting approval still succeeds', async () => {
-		const { _id } = await seedImprenditore({}, { waitApprov: true })
+	it('does not gate on waitApprov: a live session for an shopOwner awaiting approval still succeeds', async () => {
+		const { _id } = await seedShopOwner({}, { waitApprov: true })
 		const refresh = await seedSession(_id)
 
 		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
@@ -320,7 +320,7 @@ describe('refresh rotates the session on the cluster', () => {
 	const mutation = 'mutation { refresh { status accessToken } }'
 
 	it('writes the new pair, arms both TTLs, and deletes the refresh token it consumed', async () => {
-		const { _id, email } = await seedImprenditore()
+		const { _id, email } = await seedShopOwner()
 		const oldRefresh = randomUUID()
 		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
 		await redisClient.hSet(oldRefreshKey, '_id', _id.toHexString())
@@ -358,7 +358,7 @@ describe('refresh rotates the session on the cluster', () => {
 	})
 
 	it('carries onboardingStep through the rotation once onboarding is done', async () => {
-		const { _id, email } = await seedImprenditore({ onboardingDone: true, onboardingStep: 'p3' })
+		const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
 		const oldRefresh = randomUUID()
 		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
 		await redisClient.hSet(oldRefreshKey, '_id', _id.toHexString())
@@ -371,7 +371,7 @@ describe('refresh rotates the session on the cluster', () => {
 		track(`${REDIS_KEY}refresh:${refreshTokenFrom(setCookie)}`)
 
 		// makeOnboardingData only yields a step once onboardingDone is set, and it rides along
-		// into the access hash — the imprenditore frontend reads it straight back from there.
+		// into the access hash — the shopOwner frontend reads it straight back from there.
 		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, onboardingStep: 'p3' })
 	})
 })
