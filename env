@@ -1,0 +1,83 @@
+PORT=4029
+DOMAIN=xxx.tdweb.lan
+
+REDIS_IS_CLUSTER=1
+REDIS_DB1_HOST=db1
+REDIS_DB2_HOST=db2
+REDIS_DB3_HOST=db3
+REDIS_DB1_PORT=6379
+REDIS_DB2_PORT=6379
+REDIS_DB3_PORT=6379
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_KEY=marketplaceDev:
+
+MONGODB_URI=mongodb+srv://adminxxx:pwd@rs0.gio.lan/testRnApollo?ssl=false
+
+# ── Integration tests: throwaway MongoDB (MONGO_TEST_*) ───────────────────────
+#
+# `yarn test:integration` ignores MONGODB_URI above and rebuilds it from this block, so the suite
+# never touches the dev database. Copy the four user/password values from marketplace-db-setup/.env —
+# it is the same cluster and the same two users. The database name is this service’s own.
+#
+# Two users on purpose, the same split production uses:
+#   OWNER — dbOwner. test/integration/globalSetup.mts drops MONGO_TEST_DB and replays every
+#           marketplace-db-setup migration with it, so the collections carry the real validators.
+#   R/W   — readWrite. The service under test connects with this one, so a resolver that quietly
+#           needs more than readWrite fails in the suite instead of in production.
+#
+# ⚠️ THREE variables name the test database and all three must carry the SAME name:
+# MONGO_TEST_DB, MONGO_TEST_AUTH_ADMIN, and the database path of MONGO_TEST_CONN_STRING.
+# vitest.mongo.mts refuses to build a URL when they disagree, because it rebuilds the path from
+# MONGO_TEST_DB — a connection string naming a different database would still connect, and the
+# suite would drop a database that string never mentioned.
+#
+# The name below belongs to this service alone; no other repo may reuse it, since every
+# suite drops its own database.
+#
+# authSource is therefore the test database itself, NOT `admin`: both users have to be created in
+# it, with a role on it — see marketplace-db-setup/setup/mongodb.js. Dropping the database does not
+# delete them; MongoDB keeps every user in admin.system.users whatever its auth database is.
+#
+# Shape: mongodb+srv://<host>/dbMarketplaceTestImprAuthz   (credentials are injected from the pairs below)
+MONGO_TEST_CONN_STRING=
+MONGO_TEST_AUTH_ADMIN=dbMarketplaceTestImprAuthz
+
+# DB OWNER USER
+MONGO_TEST_UDBOWNER=
+MONGO_TEST_PWDDBOWNER=
+
+# R/W USER
+MONGO_TEST_UDBRW=
+MONGO_TEST_PWDDBRW=
+
+MONGO_TEST_DB=dbMarketplaceTestImprAuthz
+
+
+
+
+NODE_ENV=development
+
+
+UPLOAD_DIR=/media/xxx
+MAX_IMAGE_MB=20
+MAX_VIDEO_MB=100
+
+SOCKETLABS_SERVER_ID=111111
+SOCKETLABS_SERVER_APIKEY=xxxxxx
+REDIRECT_DOMAIN=https://xxxx.tdweb.lan
+
+HIT_STATS=false
+INTROSPECTION_CODE='xxx'
+
+KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+DSN="https://xxxxxxxxxxxxxx@bugsink.lan/1"
+
+# ── Qodana Ultimate Plus ──────────────────────────────────────────────────────
+# Project token from https://qodana.cloud (project settings → token). One token per
+# Cloud project: sharing one across services uploads every scan into the same project.
+# Required by ./qodana.sh to run the paid `jetbrains/qodana-js:2026.2` linter and to
+# enable coverage / license-audit / taint inspections.
+QODANA_TOKEN=

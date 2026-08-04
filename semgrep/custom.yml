@@ -1,0 +1,64 @@
+# Project-specific Semgrep rules for marketplace-dev-authenticated-authorization.
+#
+# Registry packs (p/typescript, p/javascript, p/nodejs, p/secrets) are passed
+# on the command line by the `semgrep` / `semgrep:ci` yarn scripts. This file
+# holds only rules specific to the Marketplace platform's own conventions.
+#
+# Note: the sinks below are restricted to console / logger / log receivers on
+# purpose — matching any `x.y(...)` call gives false positives (e.g.
+# `setLoginCookies(ctx, refreshToken)` in src/graphQLApi/schema/mutations/refresh.mts
+# sets a cookie, it does not log one, but its second argument is named
+# `refreshToken` and would match the pattern below on an unrestricted sink).
+rules:
+  # x-introspectioncode / INTROSPECTION_CODE is a service-to-service secret
+  # that bypasses the token check (see CLAUDE.md). It must never reach logs.
+  - id: marketplace-no-log-introspection-code
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Do not log the introspection code — it is a service-to-service secret (see CLAUDE.md, "never log x-introspectioncode"). Remove it from the log call.
+    metadata:
+      category: security
+      confidence: MEDIUM
+      references:
+        - CLAUDE.md
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(..., $ARG, ...)
+          - patterns:
+              - pattern: $L.$M(..., $ARG, ...)
+              - metavariable-regex:
+                  metavariable: $L
+                  regex: (?i)^(logger|log)$
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?i)(introspection|x-introspectioncode|introspectioncode)
+
+  # Opaque access/refresh tokens live in Redis sessions and signed cookies.
+  # Logging them defeats the whole point of opaque tokens.
+  - id: marketplace-no-log-auth-token
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Possible logging of an access/refresh token. Auth tokens must not be written to logs (see CLAUDE.md — opaque tokens + Redis sessions).
+    metadata:
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(..., $ARG, ...)
+          - patterns:
+              - pattern: $L.$M(..., $ARG, ...)
+              - metavariable-regex:
+                  metavariable: $L
+                  regex: (?i)^(logger|log)$
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?i)(accesstoken|access_token|refreshtoken|refresh_token|bearer)
+
+  # No marketplace-no-log-reset-secret rule here: this service is the Imprenditore
+  # token-lifecycle tier (mint/refresh access+refresh tokens), not the
+  # password-reset flow. `grep -rniE 'resetpwd|resethash|resetdatereq' src`
+  # returns nothing — there is no reset-hash/reset-date material in this repo
+  # for the rule to guard, so it would be dead weight (and dead documentation
+  # pointing at a file that doesn't exist here).
