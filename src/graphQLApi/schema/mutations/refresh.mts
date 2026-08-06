@@ -9,6 +9,7 @@ import {
 import { tryCatchRethrow } from '@axiumine/koa-utils/lib/tryCatchRethrow'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
 import { RefreshType } from '@ptypes/RefreshType.mjs'
+import { IRefreshData } from '@thedoctorweb_agency/marketplace-common/others/IRefreshData'
 import * as Sentry from '@sentry/node'
 import * as dotenv from 'dotenv'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
@@ -45,7 +46,10 @@ export const refresh = {
 		delete accessTokenData.refreshToken
 
 		//const refreshTokeNData: IRefreshDataWt = { _id: accessTokenData._id, org: accessTokenData.org }
-		const refreshTokenData = { _id: accessTokenData._id }
+		// The tier is carried into both new hashes. `accessTokenData` is `ctx.state.user`, which the
+		// authorization middleware built *after* asserting the tier of the incoming refresh session —
+		// so this propagates a value that has already been checked, it does not re-derive one.
+		const refreshTokenData: IRefreshData = { _id: accessTokenData._id, tier: accessTokenData.tier }
 
 		try {
 			// Store session in Redis
