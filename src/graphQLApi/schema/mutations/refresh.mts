@@ -9,8 +9,8 @@ import {
 import { tryCatchRethrow } from '@axiumine/koa-utils/lib/tryCatchRethrow'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
 import { RefreshType } from '@ptypes/RefreshType.mjs'
-import { IRefreshData } from '@thedoctorweb_agency/marketplace-common/others/IRefreshData'
 import * as Sentry from '@sentry/node'
+import { IRefreshData } from '@thedoctorweb_agency/marketplace-common/others/IRefreshData'
 import * as dotenv from 'dotenv'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
 

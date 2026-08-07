@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { REFRESH_TOKEN_EXPIRY } from '@axiumine/koa-utils/lib/tokens'
+import { TIER } from '@thedoctorweb_agency/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
 import Keygrip from 'keygrip'
@@ -128,11 +129,18 @@ async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<st
 	return { _id, email }
 }
 
-/** Register a session key and point it at a seeded shopOwner, the way a real login would. */
+/**
+ * Register a session key and point it at a seeded shopOwner, the way a real login would.
+ *
+ * ⚠️ `tier` is part of "the way a real login would": `setRedisLoginSessionShopOwner` writes it, and
+ * the handler calls `assertTier` on it before the MongoDB lookup. A seed without one is refused with
+ * 403 — correctly, since a missing tier is invalid rather than a wildcard — so every test past the
+ * gate would fail for a reason that has nothing to do with what it asserts.
+ */
 async function seedSession(_id: mongoose.Types.ObjectId) {
 	const refresh = randomUUID()
 	const refreshKey = track(`${REDIS_KEY}refresh:${refresh}`)
-	await redisClient.hSet(refreshKey, '_id', _id.toHexString())
+	await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 	return refresh
 }
@@ -257,7 +265,9 @@ describe('refresh-cookie gate over HTTP', () => {
 	it('answers 401 when the live session points at an shopOwner MongoDB does not have', async () => {
 		const refresh = randomUUID()
 		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
-		await redisClient.hSet(refreshKey, '_id', new mongoose.Types.ObjectId().toHexString())
+		// Correct tier, so the request really does reach MongoDB and die there — a tier-less seed
+		// would answer 403 at the guard and prove nothing about the lookup this test is about.
+		await redisClient.hSet(refreshKey, { _id: new mongoose.Types.ObjectId().toHexString(), tier: TIER.shopOwner })
 
 		try {
 			const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
@@ -323,7 +333,7 @@ describe('refresh rotates the session on the cluster', () => {
 		const { _id, email } = await seedShopOwner()
 		const oldRefresh = randomUUID()
 		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
-		await redisClient.hSet(oldRefreshKey, '_id', _id.toHexString())
+		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 		const { status, json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 
@@ -343,8 +353,8 @@ describe('refresh rotates the session on the cluster', () => {
 
 		// The handler rebuilt ctx.state.user out of Redis + MongoDB and the resolver strips
 		// refreshToken back off it, so the new access hash is exactly what the resource tier reads.
-		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email })
-		expect(await redisClient.hGetAll(newRefreshKey)).toEqual({ _id: _id.toHexString() })
+		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, tier: TIER.shopOwner })
+		expect(await redisClient.hGetAll(newRefreshKey)).toEqual({ _id: _id.toHexString(), tier: TIER.shopOwner })
 
 		// Both expire() calls really ran, and ran *after* the hSet. A key whose TTL was armed
 		// before its fields would read -1 here.
@@ -361,7 +371,7 @@ describe('refresh rotates the session on the cluster', () => {
 		const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
 		const oldRefresh = randomUUID()
 		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
-		await redisClient.hSet(oldRefreshKey, '_id', _id.toHexString())
+		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 		const { json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 		expect(json.errors).toBeUndefined()
@@ -372,7 +382,12 @@ describe('refresh rotates the session on the cluster', () => {
 
 		// makeOnboardingData only yields a step once onboardingDone is set, and it rides along
 		// into the access hash — the shopOwner frontend reads it straight back from there.
-		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, onboardingStep: 'p3' })
+		expect(await redisClient.hGetAll(accessKey)).toEqual({
+			_id: _id.toHexString(),
+			email,
+			tier: TIER.shopOwner,
+			onboardingStep: 'p3'
+		})
 	})
 })
 
