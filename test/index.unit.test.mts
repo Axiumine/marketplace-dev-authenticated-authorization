@@ -71,6 +71,24 @@ describe('checkRequiredEnv', () => {
 	it('throws naming the first missing variable', () => {
 		expect(() => checkRequiredEnv({})).toThrow(`Missing required environment variable: ${REQUIRED_ENV_VARS[0]}`)
 	})
+
+	/*
+	 * Both entries named as literals, because the two tests above cannot see WHICH names the list
+	 * carries: the first builds its passing environment out of the list itself, so a corrupted entry
+	 * is satisfied by the very stub the corruption produced, and the second only ever reads
+	 * REQUIRED_ENV_VARS[0].
+	 *
+	 * MONGODB_URI — start() calls MongoDBConnect(), so without the guard a missing URI surfaces as a
+	 * driver error from inside the try, reported to Sentry and exited 1, instead of one line before
+	 * anything connects.
+	 * INTROSPECTION_CODE — the service-to-service bypass compares the header against
+	 * `${process.env.INTROSPECTION_CODE}`, which stringifies an unset value to 'undefined' and admits
+	 * any caller sending that literal string.
+	 */
+	it('requires MONGODB_URI and INTROSPECTION_CODE by name', () => {
+		expect(REQUIRED_ENV_VARS).toContain('MONGODB_URI')
+		expect(REQUIRED_ENV_VARS).toContain('INTROSPECTION_CODE')
+	})
 })
 
 describe('buildValidationRules', () => {

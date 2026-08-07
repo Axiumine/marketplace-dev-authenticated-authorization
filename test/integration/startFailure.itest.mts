@@ -25,9 +25,9 @@ describe('start() when MongoDB refuses the connection', () => {
 	})
 
 	it('logs, tears down the datasources that did come up, and exits 1', async () => {
-		// MONGODB_URI is not even in this service's REQUIRED_ENV_VARS (unlike the public tier) — the
-		// env guard would let a missing value through unnoticed. Set here anyway, and truthy, so the
-		// failure happens where it is meant to: inside MongoDBConnect()'s real driver, not the guard.
+		// Set truthy so the failure happens where it is meant to, inside MongoDBConnect()'s real
+		// driver. MONGODB_URI is in REQUIRED_ENV_VARS now, so leaving it unset would fail in the env
+		// guard instead — which is the *other* test below, and a different code path entirely.
 		process.env.MONGODB_URI = 'not-a-mongodb-uri'
 
 		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
@@ -55,8 +55,7 @@ describe('start() when MongoDB refuses the connection', () => {
 	 * to Sentry, and never reaches disconnectAllDatabases — it propagates straight out of start()
 	 * and the process dies without touching a datasource. Driven through start() rather than by
 	 * calling checkRequiredEnv() directly, so it is that ordering being tested and not just the
-	 * guard's own loop. KEYGRIP_KEY_1 is used because (unlike MONGODB_URI above) it really is in
-	 * this service's REQUIRED_ENV_VARS.
+	 * guard's own loop.
 	 */
 	it('refuses to boot at all, and connects nothing, when a required variable is missing', async () => {
 		const realKey = process.env.KEYGRIP_KEY_1

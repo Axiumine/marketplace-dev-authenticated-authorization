@@ -94,7 +94,7 @@ licenseRules:
 # the same commit that bumps it in package.json.
 dependencyOverrides:
   - name: '@thedoctorweb_agency/marketplace-common'
-    version: '1.16.14'
+    version: '4.4.0'
     licenses:
       - key: 'PROPRIETARY-LICENSE'
 

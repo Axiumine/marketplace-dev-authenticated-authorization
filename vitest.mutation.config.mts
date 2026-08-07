@@ -16,7 +16,20 @@ import { nodeNextResolver } from './vitest.shared.mts'
 // Keep the plugins/resolve/inline settings in sync with vitest.config.mts — the
 // `.mjs -> .mts` NodeNext rewrite and the single-graphql-realm pinning are load
 // bearing, not preferences.
-const inlineDeps = [/graphql/, /@apollo\/server/, /@as-integrations/]
+// ⚠️ The last two are not decoration. An externalised dependency is loaded by Node's own resolver,
+// which never consults vitest's mock registry — so a `vi.mock('@axiumine/koa-utils/lib/tokens')` in a
+// test file stops intercepting the moment the import that needs faking is made from *inside* another
+// package rather than from `src/`. That is exactly what the shared session helpers do: `refresh.mts`
+// now delegates to marketplace-common's `refreshSessionTokens`, which imports `setLoginCookies` and
+// the token generators itself. Without these two entries the dry run fails outright — the real
+// `setLoginCookies` runs against a stub context and the rotation answers a GraphQLError.
+const inlineDeps = [
+	/graphql/,
+	/@apollo\/server/,
+	/@as-integrations/,
+	/@axiumine\/koa-utils/,
+	/@thedoctorweb_agency\/marketplace-common/
+]
 
 export default defineConfig({
 	plugins: [nodeNextResolver],
