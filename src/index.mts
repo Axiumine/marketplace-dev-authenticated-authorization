@@ -37,7 +37,17 @@ export const REQUIRED_ENV_VARS = [
 	'REDIS_DB3_PORT',
 	'REDIS_USERNAME',
 	'REDIS_PASSWORD',
-	'REDIS_KEY'
+	'REDIS_KEY',
+	// start() calls MongoDBConnect() — a missing URI used to surface as a driver error from inside the
+	// try, reported to Sentry and exited 1, instead of the one-line guard message before anything
+	// connects.
+	'MONGODB_URI',
+	// The service-to-service bypass compares against `${process.env.INTROSPECTION_CODE}`, so an UNSET
+	// value makes that comparison `'undefined' === 'undefined'` and any caller sending the literal
+	// string `undefined` is accepted. Narrow here — the bypass is consulted only after
+	// verifySignedRefreshToken() has already returned a token, so it stands in for a session and never
+	// for the signature — but a secret whose absence weakens a check must be required, not optional.
+	'INTROSPECTION_CODE'
 ]
 
 /**
