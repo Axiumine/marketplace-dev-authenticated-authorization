@@ -1,7 +1,7 @@
 import { TCommonHeaders } from '@axiumine/koa-utils/graphQL/schema/context/TCommonHeaders'
 import { ICookies } from '@axiumine/koa-utils/lib/ICookies'
-import { IRedisDataShopOwnerCommon } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwnerCommon'
-import { TAuthorizationSession } from '@thedoctorweb_agency/marketplace-common/others/resolveAuthorizationSession'
+import { IRedisDataShopOwnerCommon } from '@axiumine/marketplace-common/others/Redis/IRedisDataShopOwnerCommon'
+import { TAuthorizationSession } from '@axiumine/marketplace-common/others/resolveAuthorizationSession'
 import { IncomingHttpHeaders } from 'http'
 
 /*

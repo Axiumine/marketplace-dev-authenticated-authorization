@@ -23,13 +23,7 @@ import { nodeNextResolver } from './vitest.shared.mts'
 // now delegates to marketplace-common's `refreshSessionTokens`, which imports `setLoginCookies` and
 // the token generators itself. Without these two entries the dry run fails outright — the real
 // `setLoginCookies` runs against a stub context and the rotation answers a GraphQLError.
-const inlineDeps = [
-	/graphql/,
-	/@apollo\/server/,
-	/@as-integrations/,
-	/@axiumine\/koa-utils/,
-	/@thedoctorweb_agency\/marketplace-common/
-]
+const inlineDeps = [/graphql/, /@apollo\/server/, /@as-integrations/, /@axiumine\/koa-utils/, /@axiumine\/marketplace-common/]
 
 export default defineConfig({
 	plugins: [nodeNextResolver],
