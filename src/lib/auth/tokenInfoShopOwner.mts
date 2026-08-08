@@ -1,6 +1,6 @@
-import { ShopOwner } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/ShopOwner'
-import { IShopOwnerModel } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/IShopOwnerModel'
-import { findAccountForSession } from '@thedoctorweb_agency/marketplace-common/others/findAccountForSession'
+import { ShopOwner } from '@axiumine/marketplace-common/models/MongoDB/ShopOwner'
+import { IShopOwnerModel } from '@axiumine/marketplace-common/models/MongoDBInterfaces/IShopOwnerModel'
+import { findAccountForSession } from '@axiumine/marketplace-common/others/findAccountForSession'
 import { Types } from 'mongoose'
 
 /**

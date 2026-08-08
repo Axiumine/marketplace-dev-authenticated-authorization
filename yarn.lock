@@ -1480,13 +1480,6 @@
     semver "^7.7.4"
     tslib "~2.8.0"
 
-"@thedoctorweb_agency/marketplace-common@^1.21.0":
-  version "1.21.0"
-  resolved "https://registry.npmjs.org/@thedoctorweb_agency/marketplace-common/-/marketplace-common-1.21.0.tgz#d6705f3170483824ed48bf4831e8c132905bbe6d"
-  integrity sha512-gJVPB80JxwQ0hgsildQ6t2V9xMEj8u6jsvM1UZ/bUc+zZ9XeXdzLC4e4/YGYXAaBUQ13IxMaU/+DvrD8LrzIzw==
-  dependencies:
-    graphql-scalars "^1.25.0"
-
 "@tsconfig/node10@^1.0.7":
   version "1.0.12"
   resolved "http://yarnproxy.gio.lan:4873/@tsconfig/node10/-/node10-1.0.12.tgz#be57ceac1e4692b41be9de6be8c32a106636dba4"

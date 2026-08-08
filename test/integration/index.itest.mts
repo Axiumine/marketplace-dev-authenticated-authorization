@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { REFRESH_TOKEN_EXPIRY } from '@axiumine/koa-utils/lib/tokens'
-import { TIER } from '@thedoctorweb_agency/marketplace-common/others/Tier'
+import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
 import Keygrip from 'keygrip'

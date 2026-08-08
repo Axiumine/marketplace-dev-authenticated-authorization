@@ -40,10 +40,10 @@ raiseLicenseProblems: true
 # "…is in the prohibited licenses list with project license 'PROPRIETARY-LICENSE'".
 # Putting "UNLICENSED" here matches no project and the rule silently does nothing.
 #
-# PROPRIETARY-LICENSE is in `allowed` as well, for our own marketplace-common: a
-# proprietary dependency under the same owner as this proprietary project is
-# not a conflict, but without the entry the dependencyOverrides below would
-# just convert "cannot be recognized" into "prohibited license".
+# PROPRIETARY-LICENSE is in `allowed` as well so that a proprietary dependency
+# under the same owner as this proprietary project is not read as a conflict.
+# marketplace-common is no longer one of those — it is GPL-3.0-or-later now, and
+# is covered by the GPL entries alongside it.
 #
 # MPL-2.0 covers lightningcss, which arrives only as `vitest -> vite -> lightningcss`
 # (`yarn why` confirms that single path). It is a build-time devDependency: never
@@ -79,11 +79,12 @@ licenseRules:
 # cannot be recognized" problem. It is not a real license question — the license
 # is known, it is just not machine-readable at the source.
 #
-# @thedoctorweb_agency/marketplace-common — ours. package.json says "UNLICENSED",
-# npm's registered token for "no license granted"; Qodana maps that to
-# PROPRIETARY-LICENSE for the *project* it is scanning but does not resolve it
-# for a *dependency*. Stated here explicitly. (Note "UNLICENSED" is not the SPDX
-# id "Unlicense", which is a public-domain dedication and means the opposite.)
+# @axiumine/marketplace-common — ours, and GPL-3.0-or-later since it went public.
+# That is a real SPDX id, unlike the "UNLICENSED" it used to declare, but Qodana
+# resolves a license reliably for the *project* it scans and not for a
+# *dependency*, so it is still stated here rather than left to inference.
+# GPL-3.0-or-later is in `allowed` above, on the same grounds as every other
+# copyleft dependency: these services are never distributed.
 #
 # This overrides license *metadata* only. The package stays in the SCA pass, so
 # a future CVE in it is still reported.
@@ -93,10 +94,10 @@ licenseRules:
 # "cannot be recognized" problem quietly reappearing. Bump the entry below in
 # the same commit that bumps it in package.json.
 dependencyOverrides:
-  - name: '@thedoctorweb_agency/marketplace-common'
-    version: '4.4.0'
+  - name: '@axiumine/marketplace-common'
+    version: '1.0.0'
     licenses:
-      - key: 'PROPRIETARY-LICENSE'
+      - key: 'GPL-3.0-or-later'
 
 # Vulnerable-dependency check (SCA) and taint/SAST run automatically as part of
 # the recommended profile on the Ultimate linter — no extra key required.

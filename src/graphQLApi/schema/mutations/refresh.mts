@@ -1,8 +1,8 @@
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
+import { refreshSessionTokens } from '@axiumine/marketplace-common/others/refreshSessionTokens'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
 import { RefreshType } from '@ptypes/RefreshType.mjs'
 import * as Sentry from '@sentry/node'
-import { refreshSessionTokens } from '@thedoctorweb_agency/marketplace-common/others/refreshSessionTokens'
 import * as dotenv from 'dotenv'
 import { GraphQLNonNull } from 'graphql'
 
