@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
-import { buildTestMongoUrl } from './vitest.mongo.mts'
+import { buildTestMongoUrl, TEST_CSFLE_KEY_VAULT_NAMESPACE, TEST_CSFLE_MASTER_KEY_PATH } from './vitest.mongo.mts'
 import { nodeNextResolver } from './vitest.shared.mts'
 
 // graphql throws "Duplicate graphql modules / from another realm" when a transformed copy
@@ -78,7 +78,11 @@ export default defineConfig({
 						REDIS_KEY: 'marketplaceDev:itest:authenticatedAuthorization:',
 						INTROSPECTION_CODE: 'test-introspection-code',
 						PORT: '0',
-						MONGODB_URI: buildTestMongoUrl('rw')
+						MONGODB_URI: buildTestMongoUrl('rw'),
+						// ADR-029. start() refuses to boot without these two, and the file the first one
+						// names is minted by globalSetup — a throwaway, never the platform's own key.
+						CSFLE_MASTER_KEY_PATH: TEST_CSFLE_MASTER_KEY_PATH,
+						CSFLE_KEY_VAULT_NAMESPACE: TEST_CSFLE_KEY_VAULT_NAMESPACE
 					},
 					fileParallelism: false,
 					testTimeout: 30000,

@@ -1,3 +1,6 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import * as dotenv from 'dotenv'
 
 // vitest.config.mts and test/integration/globalSetup.mts both need these values before any test
@@ -137,3 +140,20 @@ export function buildTestMongoUrl(role: 'owner' | 'rw'): string {
 	// replace() hits the first '://' only, which is the scheme separator.
 	return `${hosts.replace('://', `://${user}:${password}@`)}/${TEST_DB}?${params.toString()}`
 }
+
+/**
+ * The CSFLE pair the integration project runs with (ADR-029).
+ *
+ * ⚠️ A throwaway master key, minted per run by globalSetup, and NEVER the platform's own. The suite
+ * proves that personal fields land on disk as subtype 6 and come back readable, and a key is 96
+ * random bytes — no assertion here can tell one key from another. Pointing this at the real file
+ * would make a suite depend on the one secret whose loss destroys production data, and would fail
+ * outright on a fresh clone that has never been handed it.
+ *
+ * The vault is a collection inside the throwaway database, not a vault database of its own: every
+ * user on this cluster is scoped to a single database, so anywhere else answers `Unauthorized` on
+ * the first `createIndex`. It is dropped with the rest of the database on every run, which is what
+ * keeps the data keys from outliving the key that wrapped them.
+ */
+export const TEST_CSFLE_KEY_VAULT_NAMESPACE = `${TEST_DB}.__keyVault`
+export const TEST_CSFLE_MASTER_KEY_PATH = join(tmpdir(), `csfle-itest-${TEST_DB}.key`)

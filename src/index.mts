@@ -4,6 +4,7 @@ import { koaMiddleware as apolloServerKoa } from '@as-integrations/koa'
 import { MongoDBConnect } from '@axiumine/koa-utils/dataSources/MongoDB'
 import { RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
 import { tdwKoaErrorHandler } from '@axiumine/koa-utils/koa/tdwKoaErrorHandler'
+import { setupFieldEncryption } from '@axiumine/marketplace-common/encryption/setupFieldEncryption'
 import { authenticatedAuthorizationHandler } from '@lib/auth/authenticatedAuthorizationHandler.mjs'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
 import { disconnectAllDatabases } from '@lib/db/disconnectAllDatabases.mjs'
@@ -42,6 +43,11 @@ export const REQUIRED_ENV_VARS = [
 	// try, reported to Sentry and exited 1, instead of the one-line guard message before anything
 	// connects.
 	'MONGODB_URI',
+	// ADR-029. Both are read by setupFieldEncryption() below, and both belong in this list rather
+	// than being left to fail later: a service that boots without them cannot read a single personal
+	// field, and every query that touches one throws on its first use instead of at startup.
+	'CSFLE_MASTER_KEY_PATH',
+	'CSFLE_KEY_VAULT_NAMESPACE',
 	// The service-to-service bypass compares against `${process.env.INTROSPECTION_CODE}`, so an UNSET
 	// value makes that comparison `'undefined' === 'undefined'` and any caller sending the literal
 	// string `undefined` is accepted. Narrow here — the bypass is consulted only after
@@ -204,6 +210,17 @@ export async function start() {
 		 * DB
 		 */
 		await Promise.all([RedisConnect(), MongoDBConnect()])
+
+		/****************
+		 * Field encryption (ADR-029)
+		 *
+		 * After MongoDBConnect() and before anything can query: it reuses the connection mongoose has
+		 * just opened, and the models refuse to read or write a personal field until it has run. It
+		 * throws rather than warning if the master key is missing — a service that started without it
+		 * would write plaintext into collections whose other documents are ciphertext, and nothing
+		 * would show that up until someone read the data back.
+		 */
+		await setupFieldEncryption()
 
 		const { httpServer, apolloServer } = await createServer()
 
