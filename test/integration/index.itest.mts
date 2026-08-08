@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { REFRESH_TOKEN_EXPIRY } from '@axiumine/koa-utils/lib/tokens'
+import { encryptDocument } from '@axiumine/marketplace-common/encryption/encryptDocument'
+import { ENCRYPTED_FIELDS_SHOP_OWNER, KEY_ALT_NAME_SHOP_OWNER } from '@axiumine/marketplace-common/encryption/encryptedFields'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
@@ -104,6 +106,11 @@ function track(key: string) {
  * `waitApprov`) — the state-gate tests seed a real document in each of those states so
  * `checkUserAuthorizationDisDel` (marketplace-common, unmocked) runs against real data instead of a
  * fixture object.
+ *
+ * ⚠️ The personal fields go through `encryptDocument` first (ADR-029): the collection declares them
+ * `binData`, so a raw seed of plaintext is refused by the validator. It runs after both override
+ * bags are spread, so a caller adding an encrypted path gets its value encrypted too — `deleted`,
+ * `disabled` and `waitApprov` are not personal data and stay in the clear.
  */
 async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<string, unknown> = {}) {
 	const email = `itest-${randomUUID()}@marketplace.invalid`
@@ -111,19 +118,25 @@ async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<st
 
 	await db()
 		.collection('shopOwner')
-		.insertOne({
-			_id,
-			login: { email, password: PASSWORD_HASH, ...login },
-			personalData: {
-				firstName: 'Itest',
-				lastName: 'ShopOwner',
-				birth: { date: new Date('1980-01-01T00:00:00Z') },
-				address: { street: '1 Test Street', postalCode: '01103', city: 'Springfield', province: 'MA' },
-				contacts: { mobile: '3900000000', email }
-			},
-			registeredAt: new Date(),
-			...top
-		})
+		.insertOne(
+			await encryptDocument(
+				{
+					_id,
+					login: { email, password: PASSWORD_HASH, ...login },
+					personalData: {
+						firstName: 'Itest',
+						lastName: 'ShopOwner',
+						birth: { date: new Date('1980-01-01T00:00:00Z') },
+						address: { street: '1 Test Street', postalCode: '01103', city: 'Springfield', province: 'MA' },
+						contacts: { mobile: '3900000000', email }
+					},
+					registeredAt: new Date(),
+					...top
+				},
+				ENCRYPTED_FIELDS_SHOP_OWNER,
+				KEY_ALT_NAME_SHOP_OWNER
+			)
+		)
 	seededIds.push(_id)
 
 	return { _id, email }

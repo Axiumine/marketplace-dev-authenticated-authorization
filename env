@@ -21,6 +21,26 @@ REDIS_KEY=marketplaceDev:
 
 MONGODB_URI=mongodb+srv://adminxxx:pwd@rs0.gio.lan/testRnApollo?ssl=false
 
+# ── Field encryption (ADR-029) ────────────────────────────────────────────────
+#
+# Both are required at boot: src/index.mts lists them in REQUIRED_ENV_VARS and calls
+# setupFieldEncryption() straight after MongoDBConnect(). A service that started without them would
+# write plaintext into collections whose other documents are ciphertext, and nothing would show that
+# up until someone read the data back — so it refuses to start instead.
+#
+# ⚠️ CSFLE_MASTER_KEY_PATH names a 96-byte file that must be THE SAME FILE on every service and on
+# marketplace-db-setup. The data keys in the vault are encrypted under it: a different key makes
+# every encrypted field on the platform an undecryptable blob. Keep it outside the repo, mode 400.
+# There is no escrow and no reset — losing this file loses every personal field, permanently.
+CSFLE_MASTER_KEY_PATH=/absolute/path/to/master.key
+#
+# ⚠️ The namespace is `<the database MONGODB_URI points at>.__keyVault` — the SAME database, never a
+# vault database of its own. Every user on this cluster is scoped to one database, so a vault
+# anywhere else answers `Unauthorized` on the first createIndex. `yarn test:integration` overrides
+# both of these with its own throwaway database and a key minted per run; only the values here are
+# used by `yarn dev` and `yarn start`.
+CSFLE_KEY_VAULT_NAMESPACE=dbMarketplaceDev.__keyVault
+
 # ── Integration tests: throwaway MongoDB (MONGO_TEST_*) ───────────────────────
 #
 # `yarn test:integration` ignores MONGODB_URI above and rebuilds it from this block, so the suite
