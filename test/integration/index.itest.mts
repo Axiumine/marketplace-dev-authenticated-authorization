@@ -118,7 +118,7 @@ async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<st
 				firstName: 'Itest',
 				lastName: 'ShopOwner',
 				birth: { date: new Date('1980-01-01T00:00:00Z') },
-				address: { street: 'Via Test 1', postalCode: '24031', city: 'Almenno San Salvatore', province: 'BG' },
+				address: { street: '1 Test Street', postalCode: '01103', city: 'Springfield', province: 'MA' },
 				contacts: { mobile: '3900000000', email }
 			},
 			registeredAt: new Date(),

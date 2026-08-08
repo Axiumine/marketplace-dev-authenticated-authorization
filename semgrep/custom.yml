@@ -56,7 +56,7 @@ rules:
           metavariable: $ARG
           regex: (?i)(accesstoken|access_token|refreshtoken|refresh_token|bearer)
 
-  # No marketplace-no-log-reset-secret rule here: this service is the Imprenditore
+  # No marketplace-no-log-reset-secret rule here: this service is the ShopOwner
   # token-lifecycle tier (mint/refresh access+refresh tokens), not the
   # password-reset flow. `grep -rniE 'resetpwd|resethash|resetdatereq' src`
   # returns nothing — there is no reset-hash/reset-date material in this repo

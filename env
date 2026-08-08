@@ -46,9 +46,9 @@ MONGODB_URI=mongodb+srv://adminxxx:pwd@rs0.gio.lan/testRnApollo?ssl=false
 # it, with a role on it — see marketplace-db-setup/setup/mongodb.js. Dropping the database does not
 # delete them; MongoDB keeps every user in admin.system.users whatever its auth database is.
 #
-# Shape: mongodb+srv://<host>/dbMarketplaceTestImprAuthz   (credentials are injected from the pairs below)
+# Shape: mongodb+srv://<host>/dbMarketplaceTestOwnerAuthz   (credentials are injected from the pairs below)
 MONGO_TEST_CONN_STRING=
-MONGO_TEST_AUTH_ADMIN=dbMarketplaceTestImprAuthz
+MONGO_TEST_AUTH_ADMIN=dbMarketplaceTestOwnerAuthz
 
 # DB OWNER USER
 MONGO_TEST_UDBOWNER=
@@ -58,7 +58,7 @@ MONGO_TEST_PWDDBOWNER=
 MONGO_TEST_UDBRW=
 MONGO_TEST_PWDDBRW=
 
-MONGO_TEST_DB=dbMarketplaceTestImprAuthz
+MONGO_TEST_DB=dbMarketplaceTestOwnerAuthz
 
 
 
