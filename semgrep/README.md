@@ -28,7 +28,7 @@ directory (custom + vendored) in one shot.
 
 `custom.yml` does **not** carry `marketplace-no-log-reset-secret` (present in
 `marketplace-dev-public-resource`, which owns the reset-password flow). This
-service is the Imprenditore token-lifecycle tier — it mints and rotates
+service is the ShopOwner token-lifecycle tier — it mints and rotates
 access/refresh tokens — and has no reset-hash/reset-date material to guard;
 `grep -rniE 'resetpwd|resethash|resetdatereq' src` returns nothing. It keeps
 the two rules every service shares: `marketplace-no-log-introspection-code` and
