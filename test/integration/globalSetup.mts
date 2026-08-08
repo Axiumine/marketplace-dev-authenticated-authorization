@@ -49,7 +49,7 @@ export async function setup(): Promise<void> {
 	if (migrations.length === 0) throw new Error(`No migrations found in ${MIGRATIONS_DIR}`)
 
 	// The demo seed is gated on SEED_DEMO and must stay a no-op: the suite seeds its own documents
-	// and counts them, which fixed demo rows would silently offset.
+	// and counts them, which fixed demo documents would silently offset.
 	process.env.SEED_DEMO = 'false'
 
 	const client = new MongoClient(buildTestMongoUrl('owner'))
