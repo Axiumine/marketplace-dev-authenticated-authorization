@@ -15,7 +15,7 @@ The three `*-authenticated-authorization` services were byte-identical apart fro
 and a projection. On 2026-08-07 the shared part moved into `resolveAuthorizationSession`,
 `findAccountForSession` and `refreshSessionTokens`, while the three services, three ports and three crash
 domains stayed exactly as they were. The survey behind that choice — including the two options that were
-rejected and why — is `docs/decisions/authorization-service-consolidation.md` in the parent workspace.
+rejected and why — is [`docs/decisions/authorization-service-consolidation.md`](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/decisions/authorization-service-consolidation.md) in the parent workspace.
 
 Both directions are closed. The helpers are not to be re-inlined, and the three services are not to be
 merged into one: the merge is a decision the user has already taken, against.
@@ -39,9 +39,9 @@ What is still this repo's is the whole of what makes it the ShopOwner tier:
 
 | Topic | File |
 |---|---|
-| rules for agents working in this repo | `CLAUDE.md` |
-| git hooks, gate order, node selection | `REPO.md` |
-| the whole platform — tiers, ports, terminology | parent `CLAUDE.md` |
+| rules for agents working in this repo | [`CLAUDE.md`](./CLAUDE.md) |
+| git hooks, gate order, node selection | [`REPO.md`](./REPO.md) |
+| the whole platform — tiers, ports, terminology | parent [`CLAUDE.md`](./CLAUDE.md) |
 
 ## License
 
