@@ -8,7 +8,7 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 
 | Need | File |
 |---|---|
-| what this svc is, consolidation history | [`README.md`](./README.md) |
+| what this svc is | [`README.md`](./README.md) |
 | hook internals, gate order, node selection | [`REPO.md`](./REPO.md) |
 | why the three authz svcs stay three | parent [`docs/decisions/authorization-service-consolidation.md`](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/decisions/authorization-service-consolidation.md) |
 
