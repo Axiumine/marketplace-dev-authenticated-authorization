@@ -5,7 +5,7 @@
     "url": "git+ssh://git@github.com/Marketplace-Org/marketplace-dev-authenticated-authorization.git"
   },
   "author": "Giovanni Manzoni <dev@giovannimanzoni.com> (https://giovannimanzoni.com)",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-or-later",
   "keywords": [],
   "scripts": {
     "clean": "rm -rf ./dist",
