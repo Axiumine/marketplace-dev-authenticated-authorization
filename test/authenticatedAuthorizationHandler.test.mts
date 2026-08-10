@@ -5,10 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContextAuthenticatedAuthorization.mts'
 
 const hGetAll = vi.fn()
+// `incr` is the dual-read counter (E13-S02): touched only when a read misses the hashed key and finds
+// a raw one, so the steady-state tests assert it was never called.
+const incr = vi.fn()
 const tokenInfoShopOwner = vi.fn()
 const makeOnboardingData = vi.fn()
 
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGetAll } }))
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGetAll, incr } }))
 vi.mock('@axiumine/koa-utils/lib/makeOnboardingData', () => ({ makeOnboardingData }))
 vi.mock('@lib/auth/tokenInfoShopOwner.mjs', () => ({ tokenInfoShopOwner }))
 
@@ -16,6 +19,8 @@ const { authenticatedAuthorizationHandler } = await import('../src/lib/auth/auth
 
 const keys = new Keygrip(['test-key-1', 'test-key-2'], 'sha512', 'base64')
 const REFRESH = '27119032-9043-4a9f-bd4c-9d06fd576290'
+// The key that session is written under since E13-S01: the prefix plus the SHA-256 of `refresh:` + it.
+const HASHED_KEY = 'test:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d684452cefa5'
 // A real 24-hex ObjectId: the handler feeds redData._id straight into new Types.ObjectId().
 const OID = '507f1f77bcf86cd799439011'
 
@@ -51,6 +56,7 @@ describe('authenticatedAuthorizationHandler', () => {
 
 	beforeEach(() => {
 		hGetAll.mockReset()
+		incr.mockReset().mockResolvedValue(1)
 		tokenInfoShopOwner.mockReset()
 		makeOnboardingData.mockReset().mockReturnValue(null)
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
@@ -79,7 +85,11 @@ describe('authenticatedAuthorizationHandler', () => {
 
 		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).resolves.toBe('next')
 
-		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(`test:refresh:${REFRESH}`)
+		// ⚠️ A digest, not the token (E13-S01). The `refresh:` prefix is inside the hashed value, and the
+		// literal is computed elsewhere so a mutated algorithm cannot make this test agree with itself.
+		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(HASHED_KEY)
+		expect(HASHED_KEY).not.toContain(REFRESH)
+		expect(incr).not.toHaveBeenCalled()
 		// The id string is turned into an ObjectId before the lookup.
 		expect(String(tokenInfoShopOwner.mock.calls[0][0])).toBe(OID)
 		expect(ctx.state.user).toEqual({

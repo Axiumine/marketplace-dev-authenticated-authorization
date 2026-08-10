@@ -28,8 +28,19 @@ const { refresh } = await import('../src/graphQLApi/schema/mutations/refresh.mts
 
 const OID = '507f1f77bcf86cd799439011'
 const OLD_REFRESH = 'refresh:old-refresh-token'
-const keyAccess = `test:access:${ACCESS}`
-const keyRefresh = `test:refresh:${REFRESH}`
+/*
+ * Where a rotated session is written since E13-S01: the shared prefix plus the SHA-256 of the
+ * **prefixed** token. `access:` and `refresh:` live inside the digest — they are what tells the two
+ * hashes apart — and the digests are written out as literals, computed elsewhere: hashing the tokens
+ * here with the call the code makes would agree with it about any algorithm, including a mutated one.
+ */
+const keyAccess = 'test:bacb9a67a033bad50630a548fee3b22ad960f975f52984a3b3be8f76aeab972e'
+const keyRefresh = 'test:dae3d6f8bfcf40ccb5fd3f8e02ddc6c84c3ce03c513fdfb241ee09ec53637fc7'
+// The two shapes of the *used* refresh token, both deleted on rotation (E13-S02): a session minted
+// before the cutover lives under the raw key, and a rotation that dropped only the hashed one would
+// leave the token it just retired still usable.
+const oldKey = 'test:c934d70b631c47c68f5194a79773e210010efc6874a72193dd1c1e55032ddd6c'
+const oldRawKey = `test:${OLD_REFRESH}`
 
 function makeCtx() {
 	return {
@@ -65,8 +76,10 @@ describe('refresh mutation', () => {
 		expect(expire).toHaveBeenCalledWith(keyRefresh, REFRESH_EXPIRY)
 
 		expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
-		// The old refresh key is prefixed here because state.user.refreshToken holds it unprefixed.
-		expect(del).toHaveBeenCalledExactlyOnceWith(`test:${OLD_REFRESH}`)
+		// Both shapes, in that order, and each with its own single-key del (BCON-08): the digest and the
+		// raw token hash to different slots, so one multi-key del would not survive a cluster.
+		expect(del.mock.calls).toEqual([[oldKey], [oldRawKey]])
+		expect(oldKey).not.toContain(OLD_REFRESH)
 		expect(captureException).not.toHaveBeenCalled()
 	})
 

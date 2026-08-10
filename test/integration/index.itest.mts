@@ -5,6 +5,7 @@ import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { REFRESH_TOKEN_EXPIRY } from '@axiumine/koa-utils/lib/tokens'
 import { encryptDocument } from '@axiumine/marketplace-common/encryption/encryptDocument'
 import { ENCRYPTED_FIELDS_SHOP_OWNER, KEY_ALT_NAME_SHOP_OWNER } from '@axiumine/marketplace-common/encryption/encryptedFields'
+import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
@@ -152,7 +153,7 @@ async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<st
  */
 async function seedSession(_id: mongoose.Types.ObjectId) {
 	const refresh = randomUUID()
-	const refreshKey = track(`${REDIS_KEY}refresh:${refresh}`)
+	const refreshKey = track(sessionKey(`refresh:${refresh}`))
 	await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 	return refresh
@@ -277,7 +278,7 @@ describe('refresh-cookie gate over HTTP', () => {
 	// datasources in a single request, which no unit test can do.
 	it('answers 401 when the live session points at an shopOwner MongoDB does not have', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		// Correct tier, so the request really does reach MongoDB and die there — a tier-less seed
 		// would answer 403 at the guard and prove nothing about the lookup this test is about.
 		await redisClient.hSet(refreshKey, { _id: new mongoose.Types.ObjectId().toHexString(), tier: TIER.shopOwner })
@@ -345,7 +346,7 @@ describe('refresh rotates the session on the cluster', () => {
 	it('writes the new pair, arms both TTLs, and deletes the refresh token it consumed', async () => {
 		const { _id, email } = await seedShopOwner()
 		const oldRefresh = randomUUID()
-		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
+		const oldRefreshKey = track(sessionKey(`refresh:${oldRefresh}`))
 		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 		const { status, json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
@@ -357,8 +358,8 @@ describe('refresh rotates the session on the cluster', () => {
 		// here rather than after the assertions below — a failing expect would otherwise strand the
 		// new refresh hash for its whole 90-day TTL.
 		const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
-		const accessKey = track(`${REDIS_KEY}access:${refreshed.accessToken}`)
-		const newRefreshKey = track(`${REDIS_KEY}refresh:${refreshTokenFrom(setCookie)}`)
+		const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
+		const newRefreshKey = track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
 
 		expect(refreshed.status).toBe(true)
 		expect(refreshed.accessToken).not.toBe('')
@@ -383,15 +384,15 @@ describe('refresh rotates the session on the cluster', () => {
 	it('carries onboardingStep through the rotation once onboarding is done', async () => {
 		const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
 		const oldRefresh = randomUUID()
-		const oldRefreshKey = track(`${REDIS_KEY}refresh:${oldRefresh}`)
+		const oldRefreshKey = track(sessionKey(`refresh:${oldRefresh}`))
 		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
 		const { json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 		expect(json.errors).toBeUndefined()
 
 		const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
-		const accessKey = track(`${REDIS_KEY}access:${refreshed.accessToken}`)
-		track(`${REDIS_KEY}refresh:${refreshTokenFrom(setCookie)}`)
+		const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
+		track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
 
 		// makeOnboardingData only yields a step once onboardingDone is set, and it rides along
 		// into the access hash — the shopOwner frontend reads it straight back from there.
