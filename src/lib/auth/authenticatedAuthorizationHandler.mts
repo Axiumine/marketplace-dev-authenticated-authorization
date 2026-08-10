@@ -3,6 +3,7 @@ import { IContextRefresh } from '@axiumine/koa-utils/graphQL/schema/context/ICon
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
 import { makeOnboardingData } from '@axiumine/koa-utils/lib/makeOnboardingData'
 import { IRedisDataShopOwnerCommon } from '@axiumine/marketplace-common/others/Redis/IRedisDataShopOwnerCommon'
+import { guardRefreshAttempt } from '@axiumine/marketplace-common/others/refreshRateLimit'
 import { resolveAuthorizationSession } from '@axiumine/marketplace-common/others/resolveAuthorizationSession'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import { IContextAuthenticatedAuthorization } from '@lib/auth/IContextAuthenticatedAuthorization.mjs'
@@ -25,6 +26,12 @@ dotenv.config()
 export const authenticatedAuthorizationHandler =
 	(keys: Keygrip) => async (ctx: IContextAuthenticatedAuthorization, next: Next) => {
 		const refreshToken = verifySignedRefreshToken(ctx as unknown as IContextRefresh, keys)
+
+		// ⚠️ **Before the session read, and that is the whole point** (E14-S08). This is the only limiter that
+		// ever meters a token resolving to nothing — garbage, expired, tombstoned — because the per-family one
+		// is never reached by a token that names no family. Twenty attempts a minute per token; the signature
+		// has already been checked above, so a caller with no valid cookie never gets this far either.
+		await guardRefreshAttempt(redisClient, refreshToken)
 
 		const session = await resolveAuthorizationSession<IRedisDataShopOwnerCommon>({
 			store: redisClient,
