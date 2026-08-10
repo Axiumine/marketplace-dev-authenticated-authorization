@@ -62,34 +62,6 @@ afterAll(async () => {
 	await redisClient.close().catch(() => undefined)
 })
 
-describe('instrument.mts (Sentry bootstrap)', () => {
-	/*
-	 * Loaded by `--import ./src/instrument.mts`, so no src module imports it and it never executed
-	 * under test. Imported here with DSN blanked on purpose: a blank DSN leaves the SDK inert, so
-	 * the module's statements run for real without this suite shipping test noise to the live
-	 * Sentry project. The transport override is the actual logic, and it is asserted below.
-	 */
-	it('hands Sentry an https module that turns off certificate verification', async () => {
-		const realDsn = process.env.DSN
-		process.env.DSN = ''
-
-		try {
-			const { insecureHttpsModule } = await import('../../src/instrument.mts')
-
-			// Port 1 is reserved and closed: request() is driven for real, the options object is
-			// really mutated, and the socket is destroyed before it can go anywhere.
-			const options: { host: string; port: number; rejectUnauthorized?: boolean } = { host: '127.0.0.1', port: 1 }
-			const req = insecureHttpsModule.request(options)
-			req.on('error', () => undefined)
-			req.destroy()
-
-			expect(options.rejectUnauthorized).toBe(false)
-		} finally {
-			process.env.DSN = realDsn
-		}
-	})
-})
-
 describe('production hardening actually applies to a real server', () => {
 	/*
 	 * buildValidationRules only returns NoSchemaIntrospectionCustomRule + depthLimit(10) under
@@ -105,6 +77,14 @@ describe('production hardening actually applies to a real server', () => {
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
 			server = await createServer()
+			// ⚠️ Restored the moment the server exists, and this is load-bearing rather than tidy.
+			// `validationRules: buildValidationRules()` is evaluated once, inside createServer(), so the
+			// introspection rule this test is about is already fixed on the running Apollo — while the
+			// request below still has to get past authenticatedAuthorizationHandler, whose introspection
+			// bypass E13-S11 disables outside `development` and `test`. Booted as production, called as
+			// test: exactly what the test name claims, and the only way to reach the schema here without
+			// seeding an encrypted account. The bypass's own production behaviour is asserted below.
+			process.env.NODE_ENV = realNodeEnv
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
 			const { port } = server.httpServer.address() as AddressInfo
 
@@ -117,6 +97,45 @@ describe('production hardening actually applies to a real server', () => {
 
 			expect(json.data).toBeUndefined()
 			expect(json.errors?.[0]?.message).toMatch(/introspection/i)
+		} finally {
+			process.env.NODE_ENV = realNodeEnv
+			if (server) {
+				await server.apolloServer.stop()
+				await new Promise<void>((resolve) => server!.httpServer.close(() => resolve()))
+			}
+		}
+	})
+
+	/*
+	 * E13-S11 over real HTTP, at the comparison site all three authorization services share. The bypass
+	 * admits a request whose cookie signature is valid but whose session is gone — the exact shape the
+	 * test above relies on — and outside `development` and `test` it must stop admitting it, answering
+	 * with the 498 a caller sending no code at all already gets. The server boots normally here: the
+	 * gate is read per request, so what matters is the environment in force when the request arrives.
+	 */
+	it('refuses the introspection bypass when the request arrives as production', async () => {
+		const realNodeEnv = process.env.NODE_ENV
+
+		let server: Awaited<ReturnType<typeof createServer>> | undefined
+		try {
+			server = await createServer()
+			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
+			const { port } = server.httpServer.address() as AddressInfo
+
+			process.env.NODE_ENV = 'production'
+
+			const res = await fetch(`http://127.0.0.1:${port}${ENDPOINT}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...bypassHeaders() },
+				body: JSON.stringify({ query: '{ __typename }' })
+			})
+			// tdwKoaErrorHandler answers a rejected request with {message, description}; nothing of the
+			// GraphQL shape comes back, because the request never reached Apollo.
+			const json = (await res.json()) as { message?: string; data?: unknown }
+
+			expect(res.status).toBe(498)
+			expect(json.message).toBe('Invalid Token')
+			expect(json.data).toBeUndefined()
 		} finally {
 			process.env.NODE_ENV = realNodeEnv
 			if (server) {

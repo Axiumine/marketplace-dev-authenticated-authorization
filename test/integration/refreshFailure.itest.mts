@@ -1,4 +1,5 @@
 import { redisClient, RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
+import { sha256Hex } from '@axiumine/marketplace-common/others/sha256Hex'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { refresh } from '../../src/graphQLApi/schema/mutations/refresh.mts'
@@ -20,6 +21,11 @@ import type { IContextAuthenticatedAuthorization } from '../../src/lib/auth/ICon
  * add a cookie/session detour that proves nothing this direct call doesn't already prove.
  */
 describe('refresh mutation catch arm against the real Redis cluster', () => {
+	// The lineage the rotation needs before it will mint anything (E14-S01), and which the per-family
+	// rate limiter (E14-S08) counts under. Fixed rather than random so the counter this run touches on
+	// the live cluster is a key the drain below can name.
+	const FAMILY_ID = 'itest-catch-arm-family'
+
 	beforeAll(async () => {
 		await RedisConnect()
 	})
@@ -39,7 +45,12 @@ describe('refresh mutation catch arm against the real Redis cluster', () => {
 					// Promise.all (keyRefresh, `{ _id }` only) is well-formed and really writes, which is
 					// exactly why the catch arm deletes both keys rather than assuming only one exists.
 					onboardingStep: {},
-					refreshToken: 'refresh:itest-catch-arm-old-token'
+					refreshToken: 'refresh:itest-catch-arm-old-token',
+					familyId: FAMILY_ID,
+					// Now-ish and a 30-day cap: the rotation refuses a lineage it can read as expired before
+					// it ever reaches the hSet this test is about.
+					originalLogin: `${Date.now()}`,
+					sessionCapDays: '30'
 				}
 			},
 			cookies: {},
@@ -60,5 +71,10 @@ describe('refresh mutation catch arm against the real Redis cluster', () => {
 		await redisClient.set(pingKey, 'pong', { EX: 60 })
 		expect(await redisClient.get(pingKey)).toBe('pong')
 		await redisClient.del(pingKey)
+
+		// The mint attempt was counted before it failed (E14-S08), and that counter is real state on the
+		// cluster. It carries an hour's TTL of its own, so this only stops a re-run inside the hour from
+		// inheriting the previous run's count.
+		await redisClient.del(`${process.env.REDIS_KEY}rl:refresh:family:${sha256Hex(FAMILY_ID)}`)
 	})
 })
