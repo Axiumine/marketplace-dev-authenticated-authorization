@@ -1,0 +1,2 @@
+// A ShopOwner-tier write clearing its own approval gate.
+export const update = { waitApprov: false }

@@ -1,0 +1,2 @@
+// Branching on somebody else's gate, which is one line away from clearing it.
+export const isPending = (shopOwner: Record<string, unknown>) => shopOwner.waitApprov === true

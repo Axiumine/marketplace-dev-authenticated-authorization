@@ -1,0 +1,2 @@
+// Reading the field off a document the service loaded for some other reason.
+export const operatorNote = (shopOwner: Record<string, unknown>) => shopOwner.notes

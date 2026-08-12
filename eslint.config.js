@@ -123,6 +123,37 @@ export default [
 					selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
 					message:
 						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				},
+				// E01-S10 — the two `shopOwner` fields the Admin tier owns outright, refused here so that "no
+				// ShopOwner-tier service selects them" stops being a claim about how the code happens to be
+				// written today. `notes` is free text an operator wrote *about* a named person, encrypted at rest
+				// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
+				// is BC-03's approval gate itself: a service that could write it could approve its own account.
+				//
+				// The list and the whole argument live on `OPERATOR_ONLY_FIELDS_SHOP_OWNER` in
+				// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
+				// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
+				// `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
+				// honest is the test in that repo asserting both names still resolve to real paths on
+				// `ShopOwnerSchema`, so a rename fails in the repo that owns the shape rather than silently
+				// leaving three selectors pointing at a field that no longer exists.
+				//
+				// Four shapes per field, because the projection is the one that matters and it is none of the
+				// other three: a Mongoose projection is a single space-separated string, where the field name is
+				// neither a key nor a member — hence `Literal` with a word-bounded regex rather than a bare
+				// substring, which would also fire on any prose mentioning the field. `TSPropertySignature` is
+				// the step before it, where the interface the projection is typed against grows the field first.
+				{
+					selector:
+						"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
+					message:
+						"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an operator wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+				},
+				{
+					selector:
+						"Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
+					message:
+						"E01-S10: `shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and login deliberately does not read it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
 				}
 			]
 		}

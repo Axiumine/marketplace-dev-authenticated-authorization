@@ -1,0 +1,13 @@
+// The two projections the BC-01 services really carry, and the one thing this rule must never
+// refuse: prose. A check that fired on a sentence explaining who owns `waitApprov` would be deleted
+// by the first person who documented the boundary correctly, taking the projection guard with it.
+
+// marketplace-dev-public-authorization/src/lib/db/login/tryLoginShopOwner.mts
+export const loginProjection =
+	'_id disabled deleted login.password login.firstLogin login.lastLogin login.onboardingStep login.onboardingDone'
+
+// marketplace-dev-authenticated-authorization/src/lib/auth/tokenInfoShopOwner.mts
+export const refreshProjection = '_id login.email login.firstLogin login.onboardingStep login.onboardingDone deleted disabled'
+
+// Both field names in prose, the way this repo's own comments and BOUNDED_CONTEXT.md name them.
+export const boundary = 'BC-03 owns waitApprov: the approval queue is built on it, and notes: operator text.'

@@ -1,0 +1,2 @@
+// The object-projection form Mongoose accepts alongside the string one, and the shape of a `$set`.
+export const projection = { notes: 1 }

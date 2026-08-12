@@ -341,6 +341,11 @@ describe('shopOwner state gates against the real collection', () => {
 	// coming back through: a mock of checkUserAuthorizationDisDel could not tell us whether the
 	// real one looks at the field or not.
 	it('does not gate on waitApprov: a live session for an shopOwner awaiting approval still succeeds', async () => {
+		// The one place in this repo that names the field on purpose. E01-S10's `no-restricted-syntax`
+		// entry keeps `waitApprov` out of every service that must not read it, and a fixture is the
+		// single shape that has to name it anyway — a rule that refused this line would delete the proof
+		// that the gate is *not* read here, which is the more valuable of the two facts.
+		// eslint-disable-next-line no-restricted-syntax
 		const { _id } = await seedShopOwner({}, { waitApprov: true })
 		const refresh = await seedSession(_id)
 

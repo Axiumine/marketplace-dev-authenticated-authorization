@@ -1,0 +1,4 @@
+// The gate declared on the login-check interface, where a widened projection would land.
+export interface IShopOwnerLoginCheckData {
+	waitApprov?: boolean
+}

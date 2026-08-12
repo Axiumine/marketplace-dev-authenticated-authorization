@@ -1,0 +1,3 @@
+// The shape that matters. A Mongoose projection is one space-separated string, so the field name
+// here is neither a key nor a member — only the word-bounded Literal selector sees it.
+export const projection = '_id login.email login.firstLogin notes'

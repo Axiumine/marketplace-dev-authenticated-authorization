@@ -1,0 +1,2 @@
+// The approval gate arriving the same way the operator notes would — inside a projection string.
+export const projection = '_id disabled deleted waitApprov'

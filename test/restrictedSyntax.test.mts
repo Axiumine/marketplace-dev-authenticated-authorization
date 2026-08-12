@@ -22,6 +22,8 @@ const TLS_MESSAGE = 'E12-S04: certificate verification stays on.'
 const PII_MESSAGE = 'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false.'
 const BODY_MESSAGE = 'E12-S21: the request body is never captured.'
 const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all.'
+const NOTES_MESSAGE = 'E01-S10: `shopOwner.notes` is the Admin tier'
+const WAIT_APPROV_MESSAGE = 'E01-S10: `shopOwner.waitApprov` is BC-03'
 
 const lintFixture = async (name: string) => {
 	const code = await readFile(new URL(`${name}.mts.fixture`, FIXTURES), 'utf8')
@@ -39,7 +41,15 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 		['member-node-tls-reject-unauthorized', TLS_MESSAGE],
 		['literal-node-tls-reject-unauthorized', TLS_MESSAGE],
 		['max-incoming-request-body-size', BODY_MESSAGE],
-		['before-send-without-transaction', HOOKS_MESSAGE]
+		['before-send-without-transaction', HOOKS_MESSAGE],
+		['operator-only-notes-projection', NOTES_MESSAGE],
+		['operator-only-notes-property', NOTES_MESSAGE],
+		['operator-only-notes-member', NOTES_MESSAGE],
+		['operator-only-notes-signature', NOTES_MESSAGE],
+		['operator-only-wait-approv-projection', WAIT_APPROV_MESSAGE],
+		['operator-only-wait-approv-property', WAIT_APPROV_MESSAGE],
+		['operator-only-wait-approv-member', WAIT_APPROV_MESSAGE],
+		['operator-only-wait-approv-signature', WAIT_APPROV_MESSAGE]
 	])('reports %s exactly once', async (fixture, expected) => {
 		const messages = await lintFixture(fixture)
 
@@ -52,5 +62,13 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 describe('the block stays silent on the shape the services carry', () => {
 	it('reports nothing on the compliant init options', async () => {
 		expect(await lintFixture('compliant')).toStrictEqual([])
+	})
+
+	// The negative half of E01-S10, and the half that decides whether the rule survives contact with a
+	// reviewer: the real login and refresh projections stay silent, and so does prose naming either
+	// field. `waitApprov` written with a colon after it — the way every comment in these repos writes
+	// it — is outside the word boundary the selector matches on, by construction rather than by luck.
+	it('reports nothing on the real ShopOwner projections, or on prose naming either field', async () => {
+		expect(await lintFixture('operator-only-compliant')).toStrictEqual([])
 	})
 })

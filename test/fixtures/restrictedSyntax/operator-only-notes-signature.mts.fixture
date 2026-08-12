@@ -1,0 +1,4 @@
+// The step before a widened projection: the interface it is typed against grows the field first.
+export interface IShopOwnerLoginCheckData {
+	notes?: string
+}
