@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
+import { ITEST_REDIS_KEY } from './vitest.keygrip.mts'
 import { buildTestMongoUrl, TEST_CSFLE_KEY_VAULT_NAMESPACE, TEST_CSFLE_MASTER_KEY_PATH } from './vitest.mongo.mts'
 import { nodeNextResolver } from './vitest.shared.mts'
 
@@ -75,7 +76,11 @@ export default defineConfig({
 					// inside one service share its throwaway database.
 					env: {
 						NODE_ENV: 'test',
-						REDIS_KEY: 'marketplaceDev:itest:authenticatedAuthorization:',
+						// ⚠️ Imported, not written here: globalSetup seeds the keygrip record (ADR-034) from
+						// another process, into `${REDIS_KEY}keygrip`, and a prefix typed twice is a prefix
+						// that can be edited once — the service would then boot against a namespace nobody
+						// seeded and refuse to start.
+						REDIS_KEY: ITEST_REDIS_KEY,
 						INTROSPECTION_CODE: 'test-introspection-code',
 						PORT: '0',
 						MONGODB_URI: buildTestMongoUrl('rw'),

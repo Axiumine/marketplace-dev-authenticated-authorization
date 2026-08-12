@@ -1,5 +1,6 @@
 import http from 'node:http'
 
+import Keygrip from 'keygrip'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const captureException = vi.fn()
@@ -8,17 +9,34 @@ const RedisConnect = vi.fn()
 const MongoDBConnect = vi.fn()
 const disconnectAllDatabases = vi.fn()
 const setupFieldEncryption = vi.fn()
+const loadKeygrip = vi.fn()
+
+// Two 64-byte keys, newest first, exactly as loadKeygrip answers. Written as bytes: nothing here is a
+// real signing key, and the pair has to be distinguishable so the order can be asserted.
+const KEYS = [
+	{ id: 'k2', material: Buffer.alloc(64, 17).toString('base64'), createdAt: '2026-08-12T09:14:22.581Z' },
+	{ id: 'k1', material: Buffer.alloc(64, 34).toString('base64'), createdAt: '2026-05-01T08:00:00.000Z' }
+]
+
+// Identifiable, so the call to loadKeygrip can be asserted to have received THIS client rather than
+// merely something object-shaped.
+const redisClient = { id: 'redis-client' }
 
 vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
 // redisClient is imported transitively by the handler / resolvers; a bare stub is enough
 // because the unit project never connects — only start()'s failure path is exercised here.
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ RedisConnect, redisClient: {} }))
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ RedisConnect, redisClient }))
 vi.mock('@axiumine/koa-utils/dataSources/MongoDB', () => ({ MongoDBConnect }))
 // Mocked because the real one opens a ClientEncryption against a live cluster and reads a 96-byte
 // key file off disk (ADR-029) — neither exists in the unit project. What start() owes it is that it
 // is awaited and that its rejection lands in the same catch as a datasource failure, and both are
 // asserted below.
 vi.mock('@axiumine/marketplace-common/encryption/setupFieldEncryption', () => ({ setupFieldEncryption }))
+// Mocked for the same reason: the real one reads a Redis hash and unwraps it under KEYGRIP_KEK
+// (ADR-034), and the unit project connects to nothing. What start() owes it is that it is called with
+// this service's own name, before field encryption, and that its refusal is as fatal as a datasource
+// failure — all three asserted below.
+vi.mock('@axiumine/marketplace-common/others/loadKeygrip', () => ({ loadKeygrip }))
 vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases }))
 
 // Imported dynamically inside beforeAll, not with a top-level `await import`: src/index.mts
@@ -39,6 +57,7 @@ vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases })
 // binding below undefined instead, so each test that dereferences one fails on its own, as a
 // normal per-test failure Stryker can attribute.
 let ENDPOINT: (typeof import('../src/index.mts'))['ENDPOINT']
+let SERVICE_NAME: (typeof import('../src/index.mts'))['SERVICE_NAME']
 let REQUIRED_ENV_VARS: (typeof import('../src/index.mts'))['REQUIRED_ENV_VARS']
 let checkRequiredEnv: (typeof import('../src/index.mts'))['checkRequiredEnv']
 let buildValidationRules: (typeof import('../src/index.mts'))['buildValidationRules']
@@ -54,6 +73,7 @@ beforeAll(async () => {
 	try {
 		;({
 			ENDPOINT,
+			SERVICE_NAME,
 			REQUIRED_ENV_VARS,
 			checkRequiredEnv,
 			buildValidationRules,
@@ -96,6 +116,26 @@ describe('checkRequiredEnv', () => {
 	it('requires MONGODB_URI and INTROSPECTION_CODE by name', () => {
 		expect(REQUIRED_ENV_VARS).toContain('MONGODB_URI')
 		expect(REQUIRED_ENV_VARS).toContain('INTROSPECTION_CODE')
+	})
+
+	/*
+	 * ⚠️ ADR-034, and the same literal-name argument as the test above. The KEK is the only cookie-key
+	 * material this service still reads from its environment; the signing keys themselves come from
+	 * Redis. The two old names are asserted GONE, not merely absent from the code: leaving them in the
+	 * boot contract would keep a service refusing to start over variables nothing reads any more.
+	 */
+	it('requires the KEK by name, and no longer the signing keys themselves', () => {
+		expect(REQUIRED_ENV_VARS).toContain('KEYGRIP_KEK')
+		expect(REQUIRED_ENV_VARS).not.toContain('KEYGRIP_KEY_1')
+		expect(REQUIRED_ENV_VARS).not.toContain('KEYGRIP_KEY_2')
+	})
+})
+
+// The name this service writes into the keygrip holders table. Asserted as a literal because the
+// table is how an operator tells five services apart, and a row nobody recognises is worse than no row.
+describe('SERVICE_NAME', () => {
+	it('is the repository name', () => {
+		expect(SERVICE_NAME).toBe('marketplace-dev-authenticated-authorization')
 	})
 })
 
@@ -223,6 +263,7 @@ describe('start (failure path)', () => {
 		RedisConnect.mockReset()
 		MongoDBConnect.mockReset().mockResolvedValue(undefined)
 		setupFieldEncryption.mockReset().mockResolvedValue(undefined)
+		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
 		errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 	})
@@ -255,6 +296,23 @@ describe('start (failure path)', () => {
 		expect(disconnectAllDatabases).toHaveBeenCalledWith(1)
 	})
 
+	/*
+	 * ⚠️ The refusal this whole design exists for. A service that could not unwrap the record and started
+	 * anyway would sign cookies with keys no sibling can verify, and the symptom — some requests
+	 * authenticate and some do not, depending on which service the edge picked — is one this platform has
+	 * already paid for twice. Fatal, on the same path as a datasource failure.
+	 */
+	it('reports to Sentry and disconnects with code 1 when the keygrip record cannot be read', async () => {
+		const error = new Error('KEYGRIP_KEK_MISMATCH: this service cannot unwrap keygrip record version 3 (c77808de4139).')
+		loadKeygrip.mockRejectedValueOnce(error)
+
+		await start()
+
+		expect(errorLog).toHaveBeenCalledExactlyOnceWith('error', error)
+		expect(captureException).toHaveBeenCalledWith(error)
+		expect(disconnectAllDatabases).toHaveBeenCalledWith(1)
+	})
+
 	// A service that came up with field encryption broken would answer queries with ciphertext and
 	// write plaintext beside it, so this failure has to be as fatal as a datasource failure.
 	it('reports to Sentry and disconnects with code 1 when field encryption cannot start', async () => {
@@ -277,6 +335,7 @@ describe('start (success path)', () => {
 		RedisConnect.mockReset().mockResolvedValue(undefined)
 		MongoDBConnect.mockReset().mockResolvedValue(undefined)
 		setupFieldEncryption.mockReset().mockResolvedValue(undefined)
+		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
 		// listen() itself is stubbed out below, so PORT can stay the same placeholder as every
 		// other required var — no socket is ever really opened by this test.
@@ -309,6 +368,24 @@ describe('start (success path)', () => {
 		await server?.apolloServer.stop()
 		info.mockRestore()
 	})
+
+	/*
+	 * ⚠️ Two things at once, and both are ordering. The keys are read with THIS service's own name — the
+	 * holders table is worthless if five services write the same label — and they are read BEFORE field
+	 * encryption, because the connect that answers them is the one that just resolved and because a boot
+	 * that is going to be refused should be refused before it opens a ClientEncryption.
+	 */
+	it('reads the signing keys under its own name, right after the connect and before field encryption', async () => {
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+
+		const server = await start()
+
+		expect(loadKeygrip).toHaveBeenCalledExactlyOnceWith(redisClient, SERVICE_NAME)
+		expect(loadKeygrip.mock.invocationCallOrder[0]).toBeLessThan(setupFieldEncryption.mock.invocationCallOrder[0])
+
+		await server?.apolloServer.stop()
+		info.mockRestore()
+	})
 })
 
 // ⚠️ **`app.proxy` off is load-bearing, not an unset default nobody thought about.** With it off,
@@ -322,9 +399,37 @@ describe('app.proxy', () => {
 	it('is off on the constructed Koa app', async () => {
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
 
-		const { app, apolloServer } = await createServer()
+		const { app, apolloServer } = await createServer(KEYS)
 
 		expect(app.proxy).toBeFalsy()
+
+		await apolloServer.stop()
+		vi.unstubAllEnvs()
+	})
+})
+
+/*
+ * ⚠️ What `Keygrip` is built from, and in which order (ADR-034). Signatures are compared rather than
+ * the array being read back, because `Keygrip` keeps its keys private — and comparing signatures is
+ * also what proves the algorithm is still sha512 and that the *material* is what reaches it, not the
+ * key ids or the whole objects.
+ */
+describe('the signing keys', () => {
+	it('signs with the first key, verifies with the older one, and stays sha512', async () => {
+		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+
+		const { apolloServer, keys } = await createServer(KEYS)
+		const newest = new Keygrip([KEYS[0].material], 'sha512')
+		const oldest = new Keygrip([KEYS[1].material], 'sha512')
+
+		// Index 0 is the key that signs — the array order decides which, and reversing it would make
+		// this service sign with a key its siblings are only verifying with.
+		expect(keys.sign('session-cookie')).toBe(newest.sign('session-cookie'))
+		expect(keys.sign('session-cookie')).not.toBe(oldest.sign('session-cookie'))
+
+		// And the older key still verifies, at its own index: this is what carries already-issued
+		// cookies across a rotation instead of logging everyone out.
+		expect(keys.index('session-cookie', oldest.sign('session-cookie'))).toBe(1)
 
 		await apolloServer.stop()
 		vi.unstubAllEnvs()

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { MongoClient } from 'mongodb'
 
+import { seedKeygrip } from '../../vitest.keygrip.mts'
 import { assertTestMongoEnv, buildTestMongoUrl, TEST_CSFLE_MASTER_KEY_PATH, TEST_DB } from '../../vitest.mongo.mts'
 
 /**
@@ -62,6 +63,12 @@ export async function setup(): Promise<void> {
 	// The demo seed is gated on SEED_DEMO and must stay a no-op: the suite seeds its own documents
 	// and counts them, which fixed demo documents would silently offset.
 	process.env.SEED_DEMO = 'false'
+
+	// ⚠️ The cookie-signing keys, from here on, are a Redis record rather than two environment
+	// variables (ADR-034), and start() refuses to boot without one. Minted here for the same reason
+	// the CSFLE key above is: the run owns its secrets. This also sets KEYGRIP_KEK, which the workers
+	// inherit — they are forked after this returns, exactly as SEED_DEMO relies on.
+	await seedKeygrip()
 
 	const client = new MongoClient(buildTestMongoUrl('owner'))
 	try {
