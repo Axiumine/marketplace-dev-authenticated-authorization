@@ -58,16 +58,16 @@ describe('start() when MongoDB refuses the connection', () => {
 	 * guard's own loop.
 	 */
 	it('refuses to boot at all, and connects nothing, when a required variable is missing', async () => {
-		const realKey = process.env.KEYGRIP_KEY_1
-		delete process.env.KEYGRIP_KEY_1
+		const realKek = process.env.KEYGRIP_KEK
+		delete process.env.KEYGRIP_KEK
 
 		try {
-			await expect(start()).rejects.toThrow('Missing required environment variable: KEYGRIP_KEY_1')
+			await expect(start()).rejects.toThrow('Missing required environment variable: KEYGRIP_KEK')
 
 			expect(mongoose.connection.readyState).toBe(0)
 			expect(redisClient.isOpen).toBe(false)
 		} finally {
-			process.env.KEYGRIP_KEY_1 = realKey
+			process.env.KEYGRIP_KEK = realKek
 		}
 	})
 })

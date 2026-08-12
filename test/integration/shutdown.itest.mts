@@ -17,6 +17,7 @@ import {
 	onUnhandledRejection
 } from '../../src/index.mts'
 import { disconnectAllDatabases } from '../../src/lib/db/disconnectAllDatabases.mts'
+import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
 
 /*
  * The process-lifecycle half of the service, exercised against the real datasources.
@@ -41,7 +42,10 @@ let exitSpy: ReturnType<typeof vi.spyOn>
 // path-based routing, not after. So any real HTTP round-trip below needs the same signed-cookie +
 // introspection-code bypass index.itest.mts already relies on, even for a request whose point has
 // nothing to do with the session itself (e.g. asking whether introspection is refused).
-const keys = new Keygrip([process.env.KEYGRIP_KEY_1 as string, process.env.KEYGRIP_KEY_2 as string], 'sha512')
+const keys = new Keygrip(
+	ITEST_KEYGRIP_KEYS.map((key) => key.material),
+	'sha512'
+)
 
 function signedCookie(refresh: string): string {
 	return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
@@ -76,7 +80,7 @@ describe('production hardening actually applies to a real server', () => {
 
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
-			server = await createServer()
+			server = await createServer(ITEST_KEYGRIP_KEYS)
 			// ⚠️ Restored the moment the server exists, and this is load-bearing rather than tidy.
 			// `validationRules: buildValidationRules()` is evaluated once, inside createServer(), so the
 			// introspection rule this test is about is already fixed on the running Apollo — while the
@@ -118,7 +122,7 @@ describe('production hardening actually applies to a real server', () => {
 
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
-			server = await createServer()
+			server = await createServer(ITEST_KEYGRIP_KEYS)
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
 			const { port } = server.httpServer.address() as AddressInfo
 
@@ -190,7 +194,7 @@ describe('gracefulShutdown against the real server and the real datasources', ()
 		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
 		try {
-			const { httpServer, apolloServer } = await createServer()
+			const { httpServer, apolloServer } = await createServer(ITEST_KEYGRIP_KEYS)
 			await new Promise<void>((resolve) => httpServer.listen({ port: 0 }, () => resolve()))
 
 			// Live before, so the assertions after mean something.
