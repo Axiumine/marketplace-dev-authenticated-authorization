@@ -5,6 +5,10 @@ import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContex
 const hSet = vi.fn()
 const expire = vi.fn()
 const del = vi.fn()
+// The session index's two commands (E15-S03): the field TTL armed on the successor, and the removal of
+// the predecessor's field. A mock without them fails the whole suite the same way `incr` did.
+const hExpire = vi.fn()
+const hDel = vi.fn()
 const sAdd = vi.fn()
 // The per-family mint limiter's two commands (E14-S08). The rotation counts itself before it mints, so
 // a mock without these fails the whole suite with `store.incr is not a function`.
@@ -18,7 +22,7 @@ const REFRESH = 'new-refresh-token'
 const ACCESS_EXPIRY = 900
 const REFRESH_EXPIRY = 2592000
 
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hSet, expire, del, sAdd, incr, ttl } }))
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hSet, expire, del, hExpire, hDel, sAdd, incr, ttl } }))
 vi.mock('@axiumine/koa-utils/lib/setLoginCookies', () => ({ setLoginCookies }))
 // Token generation is random by design; pinning it here is what makes the Redis keys assertable.
 vi.mock('@axiumine/koa-utils/lib/tokens', () => ({
@@ -73,6 +77,20 @@ const familyKey = `test:family:${FAMILY_ID}`
 const rateLimitKey = 'test:rl:refresh:family:eb8e9661945f5feea4260ffdbf474a5125cc7eb0cad7d50dbfda549221efc2f7'
 
 /*
+ * The account's session index (E15-S02, pruned by E15-S03): one hash per account, named by tier *and* id,
+ * one field per live session. A rotation touches two fields of it — the successor's is written and armed,
+ * the predecessor's is removed — and both field names are the bodies of the session keys above, because
+ * the revocation E15-S04 builds rebuilds `${REDIS_KEY}${field}` and never sees a token.
+ */
+const indexKey = `test:idx:shopOwner:${OID}`
+const newIndexField = keyRefresh.slice('test:'.length)
+const oldIndexField = oldKey.slice('test:'.length)
+/** Thirty days in seconds, and what the *key* gets — a literal, so a mutated cap moves one side only. */
+const INDEX_TTL = 2_592_000
+/** What the *field* gets: this lineage's cap less the hour it has already lived. A different number. */
+const FIELD_TTL = 30 * 86_400 - 3_600
+
+/*
  * ⚠️ `null` means "send no `Authorization` header at all", not "send an undefined one" — a default
  * parameter is skipped only for `undefined`, so `makeCtx(undefined)` would hand back the ordinary
  * header-carrying context and quietly assert nothing about the headerless case.
@@ -92,6 +110,8 @@ describe('refresh mutation', () => {
 		hSet.mockReset().mockResolvedValue(1)
 		expire.mockReset().mockResolvedValue(true)
 		del.mockReset().mockResolvedValue(1)
+		hExpire.mockReset().mockResolvedValue([1])
+		hDel.mockReset().mockResolvedValue(1)
 		sAdd.mockReset().mockResolvedValue(1)
 		// One mint so far this hour, and no window armed yet — an ordinary rotation, well under the limit.
 		incr.mockReset().mockResolvedValue(1)
@@ -118,7 +138,12 @@ describe('refresh mutation', () => {
 		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
 		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE })
 		expect(hSet).toHaveBeenCalledWith(tombstoneKey, { familyId: FAMILY_ID, consumedAt: `${NOW}` })
-		expect(hSet).toHaveBeenCalledTimes(3)
+		// The fourth is the account's session index: the successor filed under the same key the login
+		// created, carrying the lineage's own `originalLogin` rather than the moment of this rotation.
+		expect(hSet).toHaveBeenCalledWith(indexKey, {
+			[newIndexField]: JSON.stringify({ tier: 'shopOwner', mintedAt: LINEAGE.originalLogin })
+		})
+		expect(hSet).toHaveBeenCalledTimes(4)
 
 		expect(expire).toHaveBeenCalledWith(keyAccess, ACCESS_EXPIRY)
 		expect(expire).toHaveBeenCalledWith(keyRefresh, REFRESH_EXPIRY)
@@ -135,6 +160,24 @@ describe('refresh mutation', () => {
 		// it counts in — an hour, the one window long enough to see a rotation loop.
 		expect(incr).toHaveBeenCalledExactlyOnceWith(rateLimitKey)
 		expect(expire).toHaveBeenCalledWith(rateLimitKey, 3600)
+
+		/*
+		 * ⚠️ **The successor's field carries what is LEFT of the cap, not a fresh one** (E15-S03). This
+		 * lineage logged in an hour ago under a thirty-day cap, so the field expires in twenty-nine days and
+		 * twenty-three hours — and the number is the point: rearming the full cap on every rotation would
+		 * keep a session refreshed hourly listed for as long as it kept refreshing, which is exactly the
+		 * absolute cap the index would then be disagreeing with. The key's own TTL is the flat thirty days.
+		 */
+		expect(hExpire).toHaveBeenCalledExactlyOnceWith(indexKey, newIndexField, FIELD_TTL)
+		expect(expire).toHaveBeenCalledWith(indexKey, INDEX_TTL)
+		/*
+		 * ⚠️ **The predecessor's field goes, and it goes AFTER the session key it names** (E15-S03).
+		 * Unfiled first, a still-usable refresh token is listed nowhere for the width of the window between
+		 * the two calls, and a revocation running in it misses the session entirely. Rotation is where that
+		 * window would be widest — it is the one operation that runs on every active session, all day.
+		 */
+		expect(hDel).toHaveBeenCalledExactlyOnceWith(indexKey, oldIndexField)
+		expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
 
 		expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
 		// Three single-key deletes (BCON-08): the access token the call was made with, then both shapes
