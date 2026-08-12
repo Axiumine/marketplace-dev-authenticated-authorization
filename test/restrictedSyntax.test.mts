@@ -24,6 +24,7 @@ const BODY_MESSAGE = 'E12-S21: the request body is never captured.'
 const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all.'
 const NOTES_MESSAGE = 'E01-S10: `shopOwner.notes` is the Admin tier'
 const WAIT_APPROV_MESSAGE = 'E01-S10: `shopOwner.waitApprov` is BC-03'
+const KEYGRIP_MESSAGE = 'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034.'
 
 /*
  * The path matters as much as the code since the approval-gate fix: the write ban on `waitApprov` is
@@ -138,9 +139,50 @@ describe('the waitApprov write ban is scoped to src/**', () => {
 			{
 				selector: "Property[key.name='waitApprov']",
 				message: expect.stringContaining(WAIT_APPROV_MESSAGE) as unknown as string
+			},
+			{
+				selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.name=/^KEYGRIP_KEY_/]",
+				message: expect.stringContaining(KEYGRIP_MESSAGE) as unknown as string
+			},
+			{
+				selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.value=/^KEYGRIP_KEY_/]",
+				message: expect.stringContaining(KEYGRIP_MESSAGE) as unknown as string
 			}
 		])
 		expect(shared.some((entry) => entry.selector.includes('waitApprov'))).toBe(false)
+		expect(shared.some((entry) => entry.selector.includes('KEYGRIP_KEY_'))).toBe(false)
+	})
+})
+
+/*
+ * E01-S15, the same scoping shape for the opposite reason.
+ *
+ * `KEYGRIP_KEY_1`/`KEYGRIP_KEY_2` stopped being read when ADR-034 moved the signing keys into a wrapped
+ * Redis record. Reading one here again would sign cookies the other four services cannot verify, and the
+ * only symptom is a browser that is silently logged out — so the names are refused rather than merely
+ * absent. Two selectors: `process.env.X` parses as an Identifier, `process.env['X']` as a Literal.
+ *
+ * Scoped to `src/**` because `index.unit.test.mts` asserts those very names are NOT in
+ * `REQUIRED_ENV_VARS`. A repo-wide ban would refuse the test that proves the story.
+ */
+describe('the KEYGRIP_KEY_ ban is scoped to src/**', () => {
+	it.each(['keygrip-key-member', 'keygrip-key-literal'])('reports %s exactly once under src/', async (fixture) => {
+		const messages = await lintFixture(fixture, SRC_PATH)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(KEYGRIP_MESSAGE)
+		expect(messages[0]?.severity).toBe(2)
+	})
+
+	it.each(['keygrip-key-member', 'keygrip-key-literal'])('stays silent on %s under test/', async (fixture) => {
+		expect(await lintFixture(fixture)).toStrictEqual([])
+	})
+
+	// The negative half: both selectors are anchored on `process.env`, so the KEK the services really do
+	// read is untouched, and so is the `KEYGRIP_KEY_BYTES` constant a prefix match on the bare name would
+	// have caught.
+	it.each([SRC_PATH, TEST_PATH])('reports nothing on the compliant KEK read at %s', async (filePath) => {
+		expect(await lintFixture('keygrip-kek-compliant', filePath)).toStrictEqual([])
 	})
 })
 
