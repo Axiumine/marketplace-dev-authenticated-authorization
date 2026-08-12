@@ -1,4 +1,5 @@
-// The gate declared on the login-check interface, where a widened projection would land.
+// The gate declared on the login-check interface — where the widened projection has to land for the
+// read to typecheck. `IShopOwnerLoginCheckData` in marketplace-dev-public-authorization carries it.
 export interface IShopOwnerLoginCheckData {
 	waitApprov?: boolean
 }

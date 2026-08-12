@@ -160,6 +160,28 @@ async function seedSession(_id: mongoose.Types.ObjectId, lineage = sessionLineag
 }
 
 /**
+ * The same seed, for the tests that let the rotation actually happen. A rotation writes two keys of
+ * its own beyond the new pair — the lineage's family set and the consumed token's tombstone, both
+ * carrying the refresh token's own 90-day TTL.
+ *
+ * ⚠️ Both are registered for the drain *before* the call that creates them, never after. An `expect`
+ * failing in between would otherwise strand a 90-day key on a cluster this suite shares.
+ *
+ * `seedSession` above is this without those two: enough for a test that is refused at a guard and so
+ * never reaches the rotation. Kept as one function rather than three copies of its body because that
+ * is what it was — Qodana's DuplicatedCode found the second and third, byte for byte.
+ */
+async function seedRotatableSession(_id: mongoose.Types.ObjectId, lineage = sessionLineage()) {
+	const refresh = randomUUID()
+	const refreshKey = track(sessionKey(`refresh:${refresh}`))
+	const keyFamily = track(familyKey(lineage.familyId))
+	const keyTombstone = track(tombstoneKey(`refresh:${refresh}`))
+	await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+
+	return { refresh, refreshKey, lineage, keyFamily, keyTombstone }
+}
+
+/**
  * The three lineage fields a real login stamps (E14-S01), and which `assertRefreshLineage` refuses a
  * session without — so, exactly like `tier` above, a seed missing them is refused at the guard and
  * every test past it would fail for a reason unrelated to what it asserts.
@@ -335,25 +357,24 @@ describe('shopOwner state gates against the real collection', () => {
 		expect(json.message).toBe('Unauthorized')
 	})
 
-	// waitApprov is the manual-approval gate documented in the workspace CLAUDE.md, but
-	// checkUserAuthorizationDisDel only reads `deleted` and `disabled` — this tier never checks it.
-	// Proving that requires a real waitApprov:true document reaching the real gate function and
-	// coming back through: a mock of checkUserAuthorizationDisDel could not tell us whether the
-	// real one looks at the field or not.
-	it('does not gate on waitApprov: a live session for an shopOwner awaiting approval still succeeds', async () => {
-		// The one place in this repo that names the field on purpose. E01-S10's `no-restricted-syntax`
-		// entry keeps `waitApprov` out of every service that must not read it, and a fixture is the
-		// single shape that has to name it anyway — a rule that refused this line would delete the proof
-		// that the gate is *not* read here, which is the more valuable of the two facts.
-		// eslint-disable-next-line no-restricted-syntax
+	// waitApprov is BC-03's manual-approval gate. Until the approval fix nothing on the platform read
+	// it, so this case asserted the opposite of what it asserts now: an operator could park a shop
+	// owner pending review and the session already in that shop owner's hands kept working until the
+	// refresh token expired, days later. `checkShopOwnerApproval` runs on every refresh for the same
+	// reason `findAccountForSession` runs the disabled/deleted gate there instead of at login only —
+	// revocation should bite within one access-token lifetime.
+	//
+	// A real waitApprov:true document has to reach the real gate. A mocked helper would pass even if
+	// the projection stopped asking for the field, which is the one mistake that makes this gate
+	// silently unreachable: `checkShopOwnerApproval` cannot refuse a flag it was never handed.
+	it('gates on waitApprov: a live session for a shop owner awaiting approval is refused', async () => {
 		const { _id } = await seedShopOwner({}, { waitApprov: true })
 		const refresh = await seedSession(_id)
 
 		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
 
-		expect(status).toBe(200)
-		expect(json.errors).toBeUndefined()
-		expect(json.data).toEqual({ helloRefresh: { txt: 'Hello from helloRefresh' } })
+		expect(status).toBe(401)
+		expect(json.message).toBe('Unauthorized')
 	})
 })
 
@@ -366,15 +387,7 @@ describe('refresh rotates the session on the cluster', () => {
 
 	it('writes the new pair, arms both TTLs, and deletes the refresh token it consumed', async () => {
 		const { _id, email } = await seedShopOwner()
-		const lineage = sessionLineage()
-		const oldRefresh = randomUUID()
-		const oldRefreshKey = track(sessionKey(`refresh:${oldRefresh}`))
-		// A rotation writes two keys of its own beyond the new pair — the lineage's family set and the
-		// consumed token's tombstone, both with the refresh token's own 90-day TTL — so both are
-		// registered for the drain here, before the call that creates them, rather than after it.
-		const keyFamily = track(familyKey(lineage.familyId))
-		const keyTombstone = track(tombstoneKey(`refresh:${oldRefresh}`))
-		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+		const { refresh: oldRefresh, refreshKey: oldRefreshKey, lineage, keyFamily, keyTombstone } = await seedRotatableSession(_id)
 
 		const { status, json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 
@@ -435,12 +448,7 @@ describe('refresh rotates the session on the cluster', () => {
 	 */
 	it('retires the access token the call was made with', async () => {
 		const { _id } = await seedShopOwner()
-		const lineage = sessionLineage()
-		const oldRefresh = randomUUID()
-		const oldRefreshKey = track(sessionKey(`refresh:${oldRefresh}`))
-		track(familyKey(lineage.familyId))
-		track(tombstoneKey(`refresh:${oldRefresh}`))
-		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+		const { refresh: oldRefresh } = await seedRotatableSession(_id)
 
 		// The access half of the same session, written the way a login writes it.
 		const oldAccess = randomUUID()
@@ -484,12 +492,7 @@ describe('refresh rotates the session on the cluster', () => {
 
 	it('carries onboardingStep through the rotation once onboarding is done', async () => {
 		const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
-		const lineage = sessionLineage()
-		const oldRefresh = randomUUID()
-		const oldRefreshKey = track(sessionKey(`refresh:${oldRefresh}`))
-		track(familyKey(lineage.familyId))
-		track(tombstoneKey(`refresh:${oldRefresh}`))
-		await redisClient.hSet(oldRefreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+		const { refresh: oldRefresh } = await seedRotatableSession(_id)
 
 		const { json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 		expect(json.errors).toBeUndefined()

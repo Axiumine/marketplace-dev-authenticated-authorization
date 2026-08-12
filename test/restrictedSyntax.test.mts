@@ -25,9 +25,24 @@ const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wir
 const NOTES_MESSAGE = 'E01-S10: `shopOwner.notes` is the Admin tier'
 const WAIT_APPROV_MESSAGE = 'E01-S10: `shopOwner.waitApprov` is BC-03'
 
-const lintFixture = async (name: string) => {
+/*
+ * The path matters as much as the code since the approval-gate fix: the write ban on `waitApprov` is
+ * the one entry scoped to `src/**`, so the same fixture text is a finding at one path and silent at
+ * the other. Both are linted here — a fixture that only ever ran at a test path could not tell a
+ * correctly scoped rule from one that stopped firing altogether.
+ *
+ * ⚠️ `SRC_PATH` is an existing source file, not the invented name `TEST_PATH` is. The shared config's
+ * TypeScript block carries `parserOptions.project`, and a path under `src/` that no file occupies is
+ * not in the TS program — the parser then fails the whole lint with a fatal error and reports no rule
+ * messages at all, which reads exactly like a rule that stopped firing. The content linted is the
+ * fixture's; only the path is borrowed. If this file ever moves, point this at another src file.
+ */
+const SRC_PATH = 'src/lib/auth/tokenInfoShopOwner.mts'
+const TEST_PATH = 'test/restrictedSyntaxFixture.mts'
+
+const lintFixture = async (name: string, filePath: string = TEST_PATH) => {
 	const code = await readFile(new URL(`${name}.mts.fixture`, FIXTURES), 'utf8')
-	const [result] = await new ESLint().lintText(code, { filePath: 'test/restrictedSyntaxFixture.mts' })
+	const [result] = await new ESLint().lintText(code, { filePath })
 
 	return (result?.messages ?? []).filter((message) => message.ruleId === 'no-restricted-syntax')
 }
@@ -45,11 +60,7 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 		['operator-only-notes-projection', NOTES_MESSAGE],
 		['operator-only-notes-property', NOTES_MESSAGE],
 		['operator-only-notes-member', NOTES_MESSAGE],
-		['operator-only-notes-signature', NOTES_MESSAGE],
-		['operator-only-wait-approv-projection', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-property', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-member', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-signature', WAIT_APPROV_MESSAGE]
+		['operator-only-notes-signature', NOTES_MESSAGE]
 	])('reports %s exactly once', async (fixture, expected) => {
 		const messages = await lintFixture(fixture)
 
@@ -59,16 +70,91 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 	})
 })
 
+/*
+ * The approval-gate half, which is a scoping rule rather than a ban and needs both halves proved.
+ *
+ * `waitApprov` used to sit beside `notes` in all four shapes. Nothing on the platform read the flag
+ * then, so an operator parking a shop owner pending review changed nothing about that account — and
+ * a rule refusing the read is a rule refusing the fix. What is left is the write: a ShopOwner-tier
+ * service able to raise or clear its own approval flag could approve its own account, and an
+ * object-literal key is the shape a `$set` is built from.
+ */
+describe('the waitApprov write ban is scoped to src/**', () => {
+	it('reports the write exactly once under src/', async () => {
+		const messages = await lintFixture('operator-only-wait-approv-property', SRC_PATH)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(WAIT_APPROV_MESSAGE)
+		expect(messages[0]?.severity).toBe(2)
+	})
+
+	// Not a loophole — a test proving the gate bites has to seed a `waitApprov: true` document, and a
+	// fixture is a `Property` like any other. A rule that refused it would delete the proof that the
+	// gate works, which is worth more than banning a write no service under test performs.
+	it('stays silent on the same write under test/', async () => {
+		expect(await lintFixture('operator-only-wait-approv-property')).toStrictEqual([])
+	})
+
+	// The three read shapes, at the path where the ban is strictest. Each one is now load-bearing:
+	// the projection is what hands the flag to `checkShopOwnerApproval`, the interface is where it
+	// has to be declared for that to typecheck, and the member read is the comparison the gate makes.
+	it.each(['operator-only-wait-approv-projection', 'operator-only-wait-approv-signature', 'operator-only-wait-approv-member'])(
+		'stays silent on %s under src/',
+		async (fixture) => {
+			expect(await lintFixture(fixture, SRC_PATH)).toStrictEqual([])
+		}
+	)
+
+	// ⚠️ The src-scoped config object sets `no-restricted-syntax` a second time, and a later flat-config
+	// object naming the same rule discards the earlier options outright rather than merging them. Drop
+	// the spread that carries the shared entries into it and every selector above silently stops firing
+	// inside src/** — the half of the codebase they exist for. Two tests catch that: three fixtures
+	// linted at a src path, and the structural comparison below, which needs no fixture per entry and
+	// so cannot go stale as entries are added.
+	it.each([
+		['operator-only-notes-projection', NOTES_MESSAGE],
+		['send-default-pii', PII_MESSAGE],
+		['assignment-reject-unauthorized', TLS_MESSAGE]
+	])('still reports %s under src/, so the shared entries survived the second config object', async (fixture, expected) => {
+		const messages = await lintFixture(fixture, SRC_PATH)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(expected)
+	})
+
+	it('gives src/** every entry test/ has, plus the write ban and nothing else', async () => {
+		const entriesAt = async (filePath: string) => {
+			const config = await new ESLint().calculateConfigForFile(filePath)
+			const [, ...entries] = config.rules['no-restricted-syntax'] as [number, ...Record<string, string>[]]
+
+			return entries
+		}
+
+		const shared = await entriesAt(TEST_PATH)
+		const src = await entriesAt(SRC_PATH)
+
+		expect(src).toStrictEqual([
+			...shared,
+			{
+				selector: "Property[key.name='waitApprov']",
+				message: expect.stringContaining(WAIT_APPROV_MESSAGE) as unknown as string
+			}
+		])
+		expect(shared.some((entry) => entry.selector.includes('waitApprov'))).toBe(false)
+	})
+})
+
 describe('the block stays silent on the shape the services carry', () => {
 	it('reports nothing on the compliant init options', async () => {
 		expect(await lintFixture('compliant')).toStrictEqual([])
 	})
 
 	// The negative half of E01-S10, and the half that decides whether the rule survives contact with a
-	// reviewer: the real login and refresh projections stay silent, and so does prose naming either
-	// field. `waitApprov` written with a colon after it — the way every comment in these repos writes
-	// it — is outside the word boundary the selector matches on, by construction rather than by luck.
-	it('reports nothing on the real ShopOwner projections, or on prose naming either field', async () => {
-		expect(await lintFixture('operator-only-compliant')).toStrictEqual([])
+	// reviewer: the two projections the gates really carry stay silent — including the `waitApprov`
+	// both of them now name — and so does prose naming either field. `notes` written with a colon
+	// after it, the way every comment in these repos writes it, falls outside the word boundary the
+	// selector matches on by construction rather than by luck.
+	it.each([SRC_PATH, TEST_PATH])('reports nothing on the real ShopOwner projections at %s', async (filePath) => {
+		expect(await lintFixture('operator-only-compliant', filePath)).toStrictEqual([])
 	})
 })

@@ -1,2 +1,3 @@
-// Branching on somebody else's gate, which is one line away from clearing it.
+// Branching on the gate — what `checkShopOwnerApproval` itself does, and legal by the same argument
+// as the projection: a read can only make a ShopOwner-tier service refuse to serve itself.
 export const isPending = (shopOwner: Record<string, unknown>) => shopOwner.waitApprov === true

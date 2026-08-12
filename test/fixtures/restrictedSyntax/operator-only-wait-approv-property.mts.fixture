@@ -1,2 +1,2 @@
-// A ShopOwner-tier write clearing its own approval gate.
+// A ShopOwner-tier write clearing its own approval gate — the object literal a `$set` is built from.
 export const update = { waitApprov: false }

@@ -1,2 +1,3 @@
-// The approval gate arriving the same way the operator notes would — inside a projection string.
+// The approval gate inside a projection string — the shape both BC-01 gates need, and the one the
+// four-shape ban used to refuse. Banning it made the gate unreachable rather than safe.
 export const projection = '_id disabled deleted waitApprov'
