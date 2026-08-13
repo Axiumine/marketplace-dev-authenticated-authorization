@@ -136,7 +136,12 @@ describe('refresh mutation', () => {
 		expect(hSet).toHaveBeenCalledWith(keyAccess, { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner' })
 		// The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
 		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
-		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE })
+		//
+		// ⚠️ **…and the key of the access token this rotation just minted** (E14-S06). A session is a pair,
+		// and the refresh half is the one that outlives a request, so it is the half that has to know the
+		// name of the other: the successor's key is re-stamped here on every rotation, which is what lets
+		// the *next* one retire this access token without being handed it in an `Authorization` header.
+		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE, accessKey: keyAccess })
 		// The tombstone names the account as well as the lineage (E17-S05): a replay is detected after this
 		// rotation deleted the session hash, so this marker is the only place the reuse trail can learn whose
 		// sessions it just ended. Neither field is a credential — the tier is a constant, the id is public.
