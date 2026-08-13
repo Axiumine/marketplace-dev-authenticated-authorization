@@ -137,7 +137,15 @@ describe('refresh mutation', () => {
 		// The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
 		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
 		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE })
-		expect(hSet).toHaveBeenCalledWith(tombstoneKey, { familyId: FAMILY_ID, consumedAt: `${NOW}` })
+		// The tombstone names the account as well as the lineage (E17-S05): a replay is detected after this
+		// rotation deleted the session hash, so this marker is the only place the reuse trail can learn whose
+		// sessions it just ended. Neither field is a credential — the tier is a constant, the id is public.
+		expect(hSet).toHaveBeenCalledWith(tombstoneKey, {
+			familyId: FAMILY_ID,
+			consumedAt: `${NOW}`,
+			_id: OID,
+			tier: 'shopOwner'
+		})
 		// The fourth is the account's session index: the successor filed under the same key the login
 		// created, carrying the lineage's own `originalLogin` rather than the moment of this rotation.
 		expect(hSet).toHaveBeenCalledWith(indexKey, {
