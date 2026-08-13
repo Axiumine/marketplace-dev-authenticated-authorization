@@ -20,7 +20,13 @@ const ttl = vi.fn()
 const tokenInfoShopOwner = vi.fn()
 const makeOnboardingData = vi.fn()
 
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGetAll, incr, expire, ttl } }))
+// The two commands a family revocation needs (E14-S02): every session filed under the lineage is read
+// back, then deleted one key at a time. Only the replay test reaches them; a mock without them fails that
+// test with `store.sMembers is not a function` rather than with the refusal it is asserting.
+const sMembers = vi.fn()
+const del = vi.fn()
+
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGetAll, incr, expire, ttl, sMembers, del } }))
 vi.mock('@axiumine/koa-utils/lib/makeOnboardingData', () => ({ makeOnboardingData }))
 vi.mock('@lib/auth/tokenInfoShopOwner.mjs', () => ({ tokenInfoShopOwner }))
 
@@ -47,6 +53,14 @@ const RATE_LIMIT_KEY = 'test:rl:refresh:token:0b45c6eb3aa4d66a24e7557de17465a308
  */
 const NOW = 1_754_784_000_000
 const LINEAGE = { familyId: '4b1a4a5e-0d3a-4a2f-9a5a-2f0f6a1b8c3d', originalLogin: `${NOW - 1000}`, sessionCapDays: '30' }
+
+/*
+ * The reuse tombstone the rotation leaves behind for the token it consumed (E14-S02) and the family set it
+ * names. The tombstone is the session digest again, under the `used:` namespace — same digest as
+ * `HASHED_KEY`, so a replay finds the marker in the slot the session vacated.
+ */
+const TOMBSTONE_KEY = 'test:used:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d684452cefa5'
+const FAMILY_KEY = `test:family:${LINEAGE.familyId}`
 
 // Cookie signed the way Koa emits it: value + `.sig` cookie holding the Keygrip signature.
 function signedCookie(token = REFRESH) {
@@ -84,6 +98,8 @@ describe('authenticatedAuthorizationHandler', () => {
 		expire.mockReset().mockResolvedValue(1)
 		// -1 is "key exists, no TTL". The limiter only reads this when repairing a window it lost.
 		ttl.mockReset().mockResolvedValue(-1)
+		sMembers.mockReset().mockResolvedValue([])
+		del.mockReset().mockResolvedValue(1)
 		tokenInfoShopOwner.mockReset()
 		makeOnboardingData.mockReset().mockReturnValue(null)
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
@@ -94,6 +110,8 @@ describe('authenticatedAuthorizationHandler', () => {
 
 	afterEach(() => vi.useRealTimers())
 
+	// AB-04: a request carrying no credential is refused
+	// AB-10: no x-introspectioncode at all leaves the ordinary refusal exactly as it is
 	it('rejects the request without a cookie', async () => {
 		const ctx = makeCtx({})
 
@@ -102,6 +120,7 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 
+	// AB-05: a credential of the wrong shape is refused — a bad scheme, a broken signature
 	it('rejects a cookie with an invalid signature', async () => {
 		const ctx = makeCtx({ cookie: `refresh_token=${REFRESH}; refresh_token.sig=fake-signature` })
 
@@ -109,6 +128,7 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(hGetAll).not.toHaveBeenCalled()
 	})
 
+	// AB-01: a valid credential is accepted and the session it resolves reaches ctx.state.user
 	it('builds state.user from the Redis session and the shopOwner record', async () => {
 		hGetAll.mockResolvedValueOnce(redisSession())
 		tokenInfoShopOwner.mockResolvedValueOnce({ login: { email: 'owner@marketplace.test' } })
@@ -164,6 +184,7 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 
+	// AB-06: a credential whose session is gone from Redis is refused
 	it('rejects when the refresh session no longer exists in Redis', async () => {
 		hGetAll.mockResolvedValueOnce({})
 
@@ -174,6 +195,51 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 
+	/*
+	 * E14-S02, and the case with the widest blast radius in this file: a refresh token is consumed by the
+	 * rotation that accepted it, so a *second* presentation of the same token is either a client that lost
+	 * a multi-tab race or a copy somebody else is holding. Past the ten-second grace window it is read as
+	 * the second, and the answer is not "this token is refused" — it is the whole lineage revoked, every
+	 * session it ever rotated into included, because a token being replayed means the chain leaked.
+	 *
+	 * ⚠️ The refusal the caller gets is the ordinary 498 an expired session gets, deliberately: a replayer
+	 * learns nothing from the response about whether the revocation happened.
+	 */
+	// AB-07: a refresh token presented a second time is refused, and its family revoked with it
+	it('refuses a replayed refresh token and takes its whole lineage down with it', async () => {
+		// Hashed key, then the raw-key fallback, then the tombstone: three reads, and only the third
+		// answers anything.
+		hGetAll
+			.mockResolvedValueOnce({})
+			.mockResolvedValueOnce({})
+			.mockResolvedValueOnce({ familyId: LINEAGE.familyId, consumedAt: `${NOW - 60_000}` })
+		sMembers.mockResolvedValueOnce([HASHED_KEY, 'test:some-access-key'])
+
+		const ctx = makeCtx({ cookie: signedCookie() })
+
+		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
+
+		expect(hGetAll).toHaveBeenLastCalledWith(TOMBSTONE_KEY)
+		expect(sMembers).toHaveBeenCalledExactlyOnceWith(FAMILY_KEY)
+		// One key per `del` (BCON-08), members first and the set itself last: dropping the set before its
+		// members would leave every session it named live and unreachable.
+		expect(del.mock.calls).toEqual([[HASHED_KEY], ['test:some-access-key'], [FAMILY_KEY]])
+		expect(tokenInfoShopOwner).not.toHaveBeenCalled()
+		expect(next).not.toHaveBeenCalled()
+	})
+
+	// The other side of the same read: a token that no live session backs and no tombstone names is
+	// ordinary expiry, and revoking a family on it would log a user out for letting a session lapse.
+	it('revokes nothing when the missing session left no tombstone behind', async () => {
+		hGetAll.mockResolvedValueOnce({})
+
+		await expect(authenticatedAuthorizationHandler(keys)(makeCtx({ cookie: signedCookie() }), next)).rejects.toThrow()
+
+		expect(sMembers).not.toHaveBeenCalled()
+		expect(del).not.toHaveBeenCalled()
+	})
+
+	// AB-08: a valid x-introspectioncode is accepted with no credential at all, and reads no session
 	it('lets a valid x-introspectioncode through an expired session without touching Mongo', async () => {
 		hGetAll.mockResolvedValueOnce({})
 
@@ -185,12 +251,68 @@ describe('authenticatedAuthorizationHandler', () => {
 		expect(next).toHaveBeenCalledTimes(1)
 	})
 
+	// AB-09: a wrong x-introspectioncode is refused
 	it('ignores a wrong x-introspectioncode', async () => {
 		hGetAll.mockResolvedValueOnce({})
 
 		const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'wrong-code' })
 
 		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
+	})
+
+	/*
+	 * E13-S11, and until E18-S02 it was tested in the four services that were not an authorization one. The
+	 * bypass is a development convenience and outside `development` and `test` it does not exist: the gate
+	 * is read before the code is, so the configured value is never consulted and the header is worth exactly
+	 * what a header nobody sent is worth.
+	 */
+	describe('outside the environment allowlist', () => {
+		afterEach(() => {
+			vi.unstubAllEnvs()
+		})
+
+		/** The rejection flattened to what a client actually sees. */
+		const refusal = async (header: Record<string, string>) => {
+			try {
+				await authenticatedAuthorizationHandler(keys)(makeCtx(header), next)
+			} catch (error) {
+				const { message, extensions } = error as { message: string; extensions: unknown }
+				return { message, extensions }
+			}
+			throw new Error('expected the handler to reject, and it returned')
+		}
+
+		// Every value below is admitted by the `NODE_ENV !== 'production'` form this gate replaced, and each
+		// is a shape a real deploy produces: a container runtime that exports nothing, a shell that exports
+		// an empty string, a capital letter, a staging box nobody ever classified.
+		// AB-11: a valid x-introspectioncode is refused outside the environment allowlist, indistinguishably from none
+		it.each([['production'], ['staging'], ['Production'], [''], [undefined]])(
+			'refuses a valid x-introspectioncode under NODE_ENV=%o',
+			async (environment) => {
+				vi.stubEnv('NODE_ENV', environment)
+				hGetAll.mockResolvedValue({})
+
+				const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })
+
+				await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
+
+				expect(tokenInfoShopOwner).not.toHaveBeenCalled()
+				expect(ctx.state.user).toBeUndefined()
+				expect(next).not.toHaveBeenCalled()
+			}
+		)
+
+		// ⚠️ The refusal is the handler's own, down to the status and the description. A gate that threw
+		// something of its own would tell the caller that the code was right and only the environment
+		// wrong — which is the one thing the response must not distinguish.
+		it('refuses it with the error a request carrying no code at all gets', async () => {
+			vi.stubEnv('NODE_ENV', 'production')
+			hGetAll.mockResolvedValue({})
+
+			expect(await refusal({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })).toEqual(
+				await refusal({ cookie: signedCookie() })
+			)
+		})
 	})
 
 	// ⚠️ The cross-tier boundary. All nine services read Redis under the same `REDIS_KEY` prefix —
@@ -203,6 +325,8 @@ describe('authenticatedAuthorizationHandler', () => {
 			['admin', 'an Admin refresh session'],
 			['user', 'a customer refresh session'],
 			[null, 'a session minted before the tier field existed']
+			// AB-02: a session minted for another tier is refused with 403, not 401
+			// AB-03: a session carrying no tier at all is refused — fail closed, never a wildcard
 		])('refuses %s (%s)', async (tier) => {
 			hGetAll.mockResolvedValueOnce(redisSession(OID, tier))
 
