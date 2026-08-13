@@ -47,7 +47,7 @@ alternatives, is the decision doc named above.
 
 ## Gates
 
-commit → secret guard, lint, coverage, Qodana. push → same + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
+commit → secret guard, lint, coverage, Qodana. push → same + semgrep (SAST) + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
