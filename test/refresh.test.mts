@@ -1,3 +1,8 @@
+// noinspection DuplicatedCode -- the fragment this shares with authenticatedAuthorizationHandler.test.mts
+// is the file header: the vitest import every suite in the repo carries, and the context type both files
+// test against. Neither can move. A `vi.mock` block is hoisted to the top of the file that declares it, so
+// the mock declarations underneath cannot be imported from a shared module either.
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContextAuthenticatedAuthorization.mts'
