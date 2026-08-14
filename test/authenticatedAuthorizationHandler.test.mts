@@ -6,11 +6,14 @@ import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContex
 
 const hGetAll = vi.fn()
 /*
- * `incr` counts two different things, and which one it counted is the assertion. It is the dual-read
- * counter (E13-S02), touched only when a read misses the hashed key and finds a raw one — and since
- * E14-S08 it is also the counter behind the per-token attempt limiter, which runs on every call.
- * So the steady-state tests pin the key it was called with rather than that it was never called:
- * the limiter must have counted once, the dual-read arm must not have counted at all.
+ * `incr` counts two different things, and which one it counted is the assertion. It is the per-token
+ * attempt limiter (E14-S08), which runs on every call, and it is the grace counter (E14-S04), which runs
+ * only on a replay inside the window. So the steady-state tests pin the key it was called with rather
+ * than that it was never called: the limiter must have counted once, and nothing else may have.
+ *
+ * It counted a third thing until E13-S10 — `dual-read-hits`, the fallback that let a pre-cutover session
+ * resolve. The assertions below are unchanged by its removal, which is the point of having written them
+ * as an exact call list rather than as a count.
  */
 const incr = vi.fn()
 // The limiter's other two commands: it arms the window on the first attempt, and reads the TTL back
@@ -150,8 +153,8 @@ describe('authenticatedAuthorizationHandler', () => {
 		// literal is computed elsewhere so a mutated algorithm cannot make this test agree with itself.
 		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(HASHED_KEY)
 		expect(HASHED_KEY).not.toContain(REFRESH)
-		// The limiter counted this attempt, and the dual-read arm did not count anything: one `INCR`
-		// in total, under the rate-limit key rather than the migration one.
+		// The limiter counted this attempt and nothing else did: one `INCR` in total, under the rate-limit
+		// key rather than under any of the counters that hang off a miss.
 		expect(incr.mock.calls).toEqual([[RATE_LIMIT_KEY]])
 		// The id string is turned into an ObjectId before the lookup.
 		expect(String(tokenInfoShopOwner.mock.calls[0][0])).toBe(OID)
@@ -216,12 +219,8 @@ describe('authenticatedAuthorizationHandler', () => {
 	 */
 	// AB-07: a refresh token presented a second time is refused, and its family revoked with it
 	it('refuses a replayed refresh token and takes its whole lineage down with it', async () => {
-		// Hashed key, then the raw-key fallback, then the tombstone: three reads, and only the third
-		// answers anything.
-		hGetAll
-			.mockResolvedValueOnce({})
-			.mockResolvedValueOnce({})
-			.mockResolvedValueOnce({ familyId: LINEAGE.familyId, consumedAt: `${NOW - 60_000}` })
+		// Hashed key, then the tombstone: two reads since E13-S10, and only the second answers anything.
+		hGetAll.mockResolvedValueOnce({}).mockResolvedValueOnce({ familyId: LINEAGE.familyId, consumedAt: `${NOW - 60_000}` })
 		sMembers.mockResolvedValueOnce([HASHED_KEY, 'test:some-access-key'])
 
 		const ctx = makeCtx({ cookie: signedCookie() })
@@ -250,7 +249,6 @@ describe('authenticatedAuthorizationHandler', () => {
 	 */
 	it('files the replay on the account trail, with no token anywhere in the line', async () => {
 		hGetAll
-			.mockResolvedValueOnce({})
 			.mockResolvedValueOnce({})
 			.mockResolvedValueOnce({ familyId: LINEAGE.familyId, consumedAt: `${NOW - 60_000}`, _id: OID, tier: 'shopOwner' })
 		sMembers.mockResolvedValueOnce([HASHED_KEY])
