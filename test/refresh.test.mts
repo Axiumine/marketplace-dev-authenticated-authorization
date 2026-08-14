@@ -45,11 +45,9 @@ const OLD_REFRESH = 'refresh:old-refresh-token'
  */
 const keyAccess = 'test:bacb9a67a033bad50630a548fee3b22ad960f975f52984a3b3be8f76aeab972e'
 const keyRefresh = 'test:dae3d6f8bfcf40ccb5fd3f8e02ddc6c84c3ce03c513fdfb241ee09ec53637fc7'
-// The two shapes of the *used* refresh token, both deleted on rotation (E13-S02): a session minted
-// before the cutover lives under the raw key, and a rotation that dropped only the hashed one would
-// leave the token it just retired still usable.
+// The *used* refresh token, deleted on rotation: a rotation that left it alive would leave the token it
+// just retired still usable. One shape only, since E13-S10 removed the raw-token key beside it.
 const oldKey = 'test:c934d70b631c47c68f5194a79773e210010efc6874a72193dd1c1e55032ddd6c'
-const oldRawKey = `test:${OLD_REFRESH}`
 // The marker left behind for the consumed refresh token (E14-S02) — same digest as `oldKey`, under the
 // `used:` namespace, so a replay of that token finds the marker after missing the session.
 const tombstoneKey = 'test:used:c934d70b631c47c68f5194a79773e210010efc6874a72193dd1c1e55032ddd6c'
@@ -193,10 +191,10 @@ describe('refresh mutation', () => {
 		expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
 
 		expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
-		// Three single-key deletes (BCON-08): the access token the call was made with, then both shapes
-		// of the refresh token it consumed. The digest and the raw token hash to different slots, so one
-		// multi-key del would not survive a cluster.
-		expect(del.mock.calls).toEqual([[presentedAccessKey], [oldKey], [oldRawKey]])
+		// Two single-key deletes (BCON-08): the access token the call was made with, then the refresh token
+		// it consumed. Two digests land in different cluster slots, so one multi-key del would not survive
+		// a cluster — and there is no third, since E13-S10 took the raw-token shape out.
+		expect(del.mock.calls).toEqual([[presentedAccessKey], [oldKey]])
 		expect(oldKey).not.toContain(OLD_REFRESH)
 		expect(captureException).not.toHaveBeenCalled()
 	})
@@ -214,7 +212,7 @@ describe('refresh mutation', () => {
 	])('rotates without retiring an access token when the call carries %s', async (_label, authorization) => {
 		await expect(refresh.resolve(null, {}, makeCtx(authorization))).resolves.toEqual({ status: true, accessToken: ACCESS })
 
-		expect(del.mock.calls).toEqual([[oldKey], [oldRawKey]])
+		expect(del).toHaveBeenCalledExactlyOnceWith(oldKey)
 	})
 
 	// Asserted by message, not `instanceof GraphQLError`: vitest inlines and transforms `graphql`
