@@ -409,7 +409,7 @@ describe('start (failure path)', () => {
 	 */
 	it('reports to Sentry and disconnects with code 1 when the server has no hash-field TTLs', async () => {
 		const error = new Error(
-			'Redis is older than 7.4.0: hash-field TTLs (HEXPIRE/HTTL) are missing, and the session index cannot prune itself without them. See docker-DBs/README.md §Redis.'
+			'Redis is older than 7.4.0: hash-field TTLs (HEXPIRE/HTTL) are missing, and the session index cannot prune itself without them. See marketplace-docker-DBs/README.md §Redis.'
 		)
 		assertHashFieldTTLSupport.mockRejectedValueOnce(error)
 

@@ -243,7 +243,7 @@ export async function start() {
 		 * refuse an unknown command at startup, it refuses it at first use. Without this the service boots
 		 * on a 7.2 server, verifies every token it is handed, and dies inside the first refresh of the day
 		 * with the cause three layers below the symptom: a client logged out mid-session because the server
-		 * is one minor version too old. The floor is 7.4.0, written down in `docker-DBs/README.md` §Redis.
+		 * is one minor version too old. The floor is 7.4.0, written down in `marketplace-docker-DBs/README.md` §Redis.
 		 */
 		await assertHashFieldTTLSupport(redisClient)
 
