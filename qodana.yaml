@@ -79,29 +79,27 @@ licenseRules:
     allowed:
       ['PROPRIETARY-LICENSE', 'GPL-3.0-or-later', 'GPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'MPL-2.0', 'CC0-1.0']
 
-# One dependency ships license metadata Qodana cannot parse, raising a "licenses
-# cannot be recognized" problem. It is not a real license question — the license
-# is known, it is just not machine-readable at the source.
+# ── No `dependencyOverrides` for @axiumine/marketplace-common ─────────────────
+# There was one here, stating the licence by hand. It existed because the package
+# declared "UNLICENSED" and was rsynced into node_modules unpublished, so Qodana had
+# no machine-readable licence to read for it and raised "licenses cannot be
+# recognized". Both halves of that premise are gone since ADR-037: the package is
+# published to registry.npmjs.org, and 2.0.x declares "license": "GPL-3.0-or-later"
+# — a real SPDX id — and ships its LICENSE file in the tarball. GPL-3.0-or-later is
+# already in `allowed` above, so the verdict now passes on the package's own
+# metadata and needs no help from this file.
 #
-# @axiumine/marketplace-common — ours, and GPL-3.0-or-later since it went public.
-# That is a real SPDX id, unlike the "UNLICENSED" it used to declare, but Qodana
-# resolves a license reliably for the *project* it scans and not for a
-# *dependency*, so it is still stated here rather than left to inference.
-# GPL-3.0-or-later is in `allowed` above, on the same grounds as every other
-# copyleft dependency: these services are never distributed.
+# ⚠️ Deliberately NOT re-added with a bumped version. `version` was an exact match,
+# so the entry stopped applying the moment the installed version moved past it, and
+# silently: every service here sat at '1.0.0' against an installed 2.0.1 — 2.0.2 in
+# admin-authenticated-resource — and nothing failed, so nothing said so. An override
+# that has to be hand-bumped in lockstep with package.json across eight repos is a
+# maintenance trap that buys nothing once the metadata is readable. Verified
+# 2026-08-28 against the last scan of three services: public-authorization (dead
+# override), admin-authenticated-resource (dead override, 2.0.2) and
+# authenticated-logout (never carried the entry) all report zero licence findings.
 #
-# This overrides license *metadata* only. The package stays in the SCA pass, so
-# a future CVE in it is still reported.
-#
-# ⚠️ `version` is an exact match, not a range: an override stops applying the
-# moment the installed version moves past it, and the only symptom is the
-# "cannot be recognized" problem quietly reappearing. Bump the entry below in
-# the same commit that bumps it in package.json.
-dependencyOverrides:
-  - name: '@axiumine/marketplace-common'
-    version: '1.0.0'
-    licenses:
-      - key: 'GPL-3.0-or-later'
+# The package stays in the SCA pass either way, so a future CVE in it is reported.
 
 # Vulnerable-dependency check (SCA) and taint/SAST run automatically as part of
 # the recommended profile on the Ultimate linter — no extra key required.
