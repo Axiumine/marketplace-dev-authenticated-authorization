@@ -1,0 +1,4 @@
+// The computed assignment, which carries a `left.property.value` where the plain one has a `left.property.name`.
+export const disown = (owner: Record<string, unknown>) => {
+	owner['disabledBy'] = null
+}

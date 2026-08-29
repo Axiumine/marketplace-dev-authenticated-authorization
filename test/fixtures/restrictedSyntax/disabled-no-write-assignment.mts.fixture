@@ -1,0 +1,4 @@
+// The document-instance form: a hydrated owner mutated in place, one `.save()` from a lifted sanction.
+export const clear = (owner: Record<string, unknown>) => {
+	owner.disabled = false
+}

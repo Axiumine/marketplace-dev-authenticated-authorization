@@ -1,0 +1,2 @@
+// A ShopOwner-tier service lifting the suspension standing against the account it is renewing a token for.
+export const update = { $set: { disabled: false } }

@@ -25,6 +25,7 @@ const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wir
 const NOTES_MESSAGE = 'E01-S10: `shopOwner.notes` is the Admin tier'
 const WAIT_APPROV_MESSAGE = 'E01-S10: `shopOwner.waitApprov` is BC-03'
 const KEYGRIP_MESSAGE = 'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034.'
+const DISABLED_MESSAGE = 'ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier'
 
 /*
  * The path matters as much as the code since the approval-gate fix: the write ban on `waitApprov` is
@@ -147,10 +148,16 @@ describe('the waitApprov write ban is scoped to src/**', () => {
 			{
 				selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.value=/^KEYGRIP_KEY_/]",
 				message: expect.stringContaining(KEYGRIP_MESSAGE) as unknown as string
+			},
+			{
+				selector:
+					'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
+				message: expect.stringContaining(DISABLED_MESSAGE) as unknown as string
 			}
 		])
 		expect(shared.some((entry) => entry.selector.includes('waitApprov'))).toBe(false)
 		expect(shared.some((entry) => entry.selector.includes('KEYGRIP_KEY_'))).toBe(false)
+		expect(shared.some((entry) => entry.selector.includes('disabled'))).toBe(false)
 	})
 })
 
@@ -183,6 +190,49 @@ describe('the KEYGRIP_KEY_ ban is scoped to src/**', () => {
 	// have caught.
 	it.each([SRC_PATH, TEST_PATH])('reports nothing on the compliant KEK read at %s', async (filePath) => {
 		expect(await lintFixture('keygrip-kek-compliant', filePath)).toStrictEqual([])
+	})
+})
+
+/*
+ * ADR-044, a third scoping rule and the same shape as the two above.
+ *
+ * Suspension is the operator's instrument at both ends: the Admin tier raises it and the Admin tier is
+ * the only hand that lifts it. A service on this tier able to write any `disabled*` field could clear a
+ * sanction standing against the account whose token it is renewing.
+ *
+ * What is refused is the write. The read is the enforcement — the refresh projection carries `disabled`
+ * so `findAccountForSession` can re-run `checkUserAuthorizationDisDel` over it, which is what ends a
+ * suspended owner's session within one access-token lifetime — so a rule firing on a read would fire on
+ * the reason the flag works at all.
+ */
+describe('the disabled* write ban is scoped to src/**', () => {
+	// Four write shapes, because a `Property`-only rule passes the assignment the E12-S04 audit actually
+	// found, and a quoted key parses to a `key.value` where the plain one has a `key.name`.
+	it.each([
+		'disabled-no-write-property',
+		'disabled-no-write-string-key',
+		'disabled-no-write-assignment',
+		'disabled-no-write-computed-assignment'
+	])('reports %s exactly once under src/', async (fixture) => {
+		const messages = await lintFixture(fixture, SRC_PATH)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(DISABLED_MESSAGE)
+		expect(messages[0]?.severity).toBe(2)
+	})
+
+	// Not a loophole — a test proving the gate refuses a suspended account has to build one, and a
+	// fixture is an object literal like any other. A rule that refused it would delete the proof that
+	// the gate works, which is worth more than banning a write no test performs.
+	it.each(['disabled-no-write-property', 'disabled-no-write-assignment'])('stays silent on %s under test/', async (fixture) => {
+		expect(await lintFixture(fixture)).toStrictEqual([])
+	})
+
+	// The read shapes at the path where the ban is strictest: the space-separated projection this
+	// service really carries, the comparison the gate makes, the destructure over a document just read,
+	// the interface that read is typed against, and prose naming the fields.
+	it.each([SRC_PATH, TEST_PATH])('reports nothing on the reads and the projection at %s', async (filePath) => {
+		expect(await lintFixture('disabled-no-write-compliant', filePath)).toStrictEqual([])
 	})
 })
 
