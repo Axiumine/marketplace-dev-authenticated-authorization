@@ -364,7 +364,11 @@ describe('shopOwner state gates against the real collection', () => {
 	})
 
 	it('answers 401 when the live session points at an shopOwner that is disabled', async () => {
-		const { _id } = await seedShopOwner({}, { disabled: true })
+		// ⚠️ The reason travels with the flag because the collection demands it: ADR-044 added
+		// `dependencies: { disabled: ['disabledReason'] }` to the validator, so a seed carrying the flag
+		// alone is refused by the server before this gate is ever reached. It is encrypted on the way in
+		// like every other personal path, which `seedShopOwner` handles by spreading before it encrypts.
+		const { _id } = await seedShopOwner({}, { disabled: true, disabledReason: 'itest suspension' })
 		const refresh = await seedSession(_id)
 
 		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })

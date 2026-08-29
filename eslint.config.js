@@ -57,6 +57,44 @@ const KEYGRIP_KEY_NO_ENV_READ = [
 	}
 ]
 
+/*
+ * ADR-044. Suspension is the operator's instrument end to end: the Admin tier raises it, and the Admin
+ * tier is the only hand that lifts it — *"if admin suspend an account, admin must remove the suspension
+ * for allow the shopowner to log in again"*. A ShopOwner-tier service able to write any `disabled*`
+ * field could clear a sanction standing against the very account whose token it is renewing, which is
+ * the argument `WAIT_APPROV_NO_WRITE` above makes one field over, and it earns the same lock.
+ *
+ * ⚠️ **A write ban, not a ban, and here that is not a nicety.** This service reads the flag: the
+ * refresh projection in `tokenInfoShopOwner` carries `disabled`, `findAccountForSession` re-runs
+ * `checkUserAuthorizationDisDel` over it on every refresh, and that read is what ends a suspended
+ * owner's session within one access-token lifetime. A rule refusing the read would refuse the
+ * enforcement. Hence four write shapes and no read shape: the object-literal key a `$set` is built
+ * from, the same key quoted, and both assignment forms (`owner.disabled = false`,
+ * `owner['disabled'] = false`), which is the shape the E12-S04 audit actually found for
+ * `rejectUnauthorized` and which a `Property`-only rule passes.
+ *
+ * `ObjectExpression >` rather than a bare `Property`, because an `ObjectPattern` is a `Property` too and
+ * destructuring the flag off a document that was just read is a read. The collateral this accepts is the
+ * object form of a Mongoose projection — `.select({ disabled: 1 })` is indistinguishable from a `$set`
+ * at this level and is refused with it. Nothing here uses that form: every projection in this service is
+ * the space-separated string, which no selector below touches.
+ *
+ * The three names are `shopOwner`'s real ones, from `BEs/marketplace-db-setup/lib/schemas/account.js`.
+ * There is no `disabledAt` — ADR-044 names one in prose as a shape it would also cover, and the schema
+ * never grew it, so banning the name would be banning nothing.
+ *
+ * Scoped to `src/**` where it is used below: a test proving the gate refuses a suspended owner has to
+ * construct that owner, and a fixture is an object literal like any other.
+ */
+const DISABLED_NO_WRITE = [
+	{
+		selector:
+			'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
+		message:
+			"ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an operator removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
+	}
+]
+
 /* Hoisted so both config objects below can share it — see the note above the second one. */
 const RESTRICTED_SYNTAX = [
 	{
@@ -192,7 +230,7 @@ export default [
 	// idiom the two blocks above already established.
 	//
 	// No `files` key on the first object, so the shared entries apply to every file eslint looks at
-	// here; the second one narrows to src/** and adds the two bans that belong there alone. Three selectors for
+	// here; the second one narrows to src/** and adds the three bans that belong there alone. Three selectors for
 	// `rejectUnauthorized` because the defect actually in the tree was an assignment
 	// (`options.rejectUnauthorized = false`), not an object literal — a `Property`-only rule passes the
 	// exact code it exists to catch — and the computed form has a `key.value` where the plain one has a
@@ -210,7 +248,13 @@ export default [
 	{
 		files: ['src/**/*.mts'],
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, WAIT_APPROV_NO_WRITE, ...KEYGRIP_KEY_NO_ENV_READ]
+			'no-restricted-syntax': [
+				'error',
+				...RESTRICTED_SYNTAX,
+				WAIT_APPROV_NO_WRITE,
+				...KEYGRIP_KEY_NO_ENV_READ,
+				...DISABLED_NO_WRITE
+			]
 		}
 	}
 ]

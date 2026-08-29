@@ -1,0 +1,2 @@
+// The same write with the key quoted, which parses to a `key.value` where the plain form has a `key.name`.
+export const update = { 'disabledReason': 'cleared on refresh' }
