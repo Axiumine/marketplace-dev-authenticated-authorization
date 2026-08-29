@@ -378,7 +378,7 @@ describe('shopOwner state gates against the real collection', () => {
 	})
 
 	// waitApprov is BC-03's manual-approval gate. Until the approval fix nothing on the platform read
-	// it, so this case asserted the opposite of what it asserts now: an operator could park a shop
+	// it, so this case asserted the opposite of what it asserts now: an admin could park a shop
 	// owner pending review and the session already in that shop owner's hands kept working until the
 	// refresh token expired, days later. `checkShopOwnerApproval` runs on every refresh for the same
 	// reason `findAccountForSession` runs the disabled/deleted gate there instead of at login only —

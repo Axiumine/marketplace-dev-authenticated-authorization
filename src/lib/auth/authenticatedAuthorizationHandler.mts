@@ -18,7 +18,7 @@ dotenv.config()
  * receives the refresh token, which carries only the user's _id — not everything the access token holds!
  *
  * The lookup, the tier assertion, the introspection bypass and the shape of the session are shared with
- * the operator and customer authorization services and live in `resolveAuthorizationSession`. What stays
+ * the admin and customer authorization services and live in `resolveAuthorizationSession`. What stays
  * here is the only part that is genuinely this tier's: which collection the `_id` is read from, and the
  * onboarding step a shop owner's session carries and the other two tiers have no equivalent of.
  */

@@ -59,10 +59,10 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 		['literal-node-tls-reject-unauthorized', TLS_MESSAGE],
 		['max-incoming-request-body-size', BODY_MESSAGE],
 		['before-send-without-transaction', HOOKS_MESSAGE],
-		['operator-only-notes-projection', NOTES_MESSAGE],
-		['operator-only-notes-property', NOTES_MESSAGE],
-		['operator-only-notes-member', NOTES_MESSAGE],
-		['operator-only-notes-signature', NOTES_MESSAGE]
+		['admin-only-notes-projection', NOTES_MESSAGE],
+		['admin-only-notes-property', NOTES_MESSAGE],
+		['admin-only-notes-member', NOTES_MESSAGE],
+		['admin-only-notes-signature', NOTES_MESSAGE]
 	])('reports %s exactly once', async (fixture, expected) => {
 		const messages = await lintFixture(fixture)
 
@@ -76,14 +76,14 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
  * The approval-gate half, which is a scoping rule rather than a ban and needs both halves proved.
  *
  * `waitApprov` used to sit beside `notes` in all four shapes. Nothing on the platform read the flag
- * then, so an operator parking a shop owner pending review changed nothing about that account — and
+ * then, so an admin parking a shop owner pending review changed nothing about that account — and
  * a rule refusing the read is a rule refusing the fix. What is left is the write: a ShopOwner-tier
  * service able to raise or clear its own approval flag could approve its own account, and an
  * object-literal key is the shape a `$set` is built from.
  */
 describe('the waitApprov write ban is scoped to src/**', () => {
 	it('reports the write exactly once under src/', async () => {
-		const messages = await lintFixture('operator-only-wait-approv-property', SRC_PATH)
+		const messages = await lintFixture('admin-only-wait-approv-property', SRC_PATH)
 
 		expect(messages).toHaveLength(1)
 		expect(messages[0]?.message).toContain(WAIT_APPROV_MESSAGE)
@@ -94,13 +94,13 @@ describe('the waitApprov write ban is scoped to src/**', () => {
 	// fixture is a `Property` like any other. A rule that refused it would delete the proof that the
 	// gate works, which is worth more than banning a write no service under test performs.
 	it('stays silent on the same write under test/', async () => {
-		expect(await lintFixture('operator-only-wait-approv-property')).toStrictEqual([])
+		expect(await lintFixture('admin-only-wait-approv-property')).toStrictEqual([])
 	})
 
 	// The three read shapes, at the path where the ban is strictest. Each one is now load-bearing:
 	// the projection is what hands the flag to `checkShopOwnerApproval`, the interface is where it
 	// has to be declared for that to typecheck, and the member read is the comparison the gate makes.
-	it.each(['operator-only-wait-approv-projection', 'operator-only-wait-approv-signature', 'operator-only-wait-approv-member'])(
+	it.each(['admin-only-wait-approv-projection', 'admin-only-wait-approv-signature', 'admin-only-wait-approv-member'])(
 		'stays silent on %s under src/',
 		async (fixture) => {
 			expect(await lintFixture(fixture, SRC_PATH)).toStrictEqual([])
@@ -114,7 +114,7 @@ describe('the waitApprov write ban is scoped to src/**', () => {
 	// linted at a src path, and the structural comparison below, which needs no fixture per entry and
 	// so cannot go stale as entries are added.
 	it.each([
-		['operator-only-notes-projection', NOTES_MESSAGE],
+		['admin-only-notes-projection', NOTES_MESSAGE],
 		['send-default-pii', PII_MESSAGE],
 		['assignment-reject-unauthorized', TLS_MESSAGE]
 	])('still reports %s under src/, so the shared entries survived the second config object', async (fixture, expected) => {
@@ -196,7 +196,7 @@ describe('the KEYGRIP_KEY_ ban is scoped to src/**', () => {
 /*
  * ADR-044, a third scoping rule and the same shape as the two above.
  *
- * Suspension is the operator's instrument at both ends: the Admin tier raises it and the Admin tier is
+ * Suspension is the admin's instrument at both ends: the Admin tier raises it and the Admin tier is
  * the only hand that lifts it. A service on this tier able to write any `disabled*` field could clear a
  * sanction standing against the account whose token it is renewing.
  *
@@ -247,6 +247,6 @@ describe('the block stays silent on the shape the services carry', () => {
 	// after it, the way every comment in these repos writes it, falls outside the word boundary the
 	// selector matches on by construction rather than by luck.
 	it.each([SRC_PATH, TEST_PATH])('reports nothing on the real ShopOwner projections at %s', async (filePath) => {
-		expect(await lintFixture('operator-only-compliant', filePath)).toStrictEqual([])
+		expect(await lintFixture('admin-only-compliant', filePath)).toStrictEqual([])
 	})
 })

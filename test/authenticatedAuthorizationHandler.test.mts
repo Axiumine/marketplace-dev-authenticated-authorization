@@ -240,12 +240,12 @@ describe('authenticatedAuthorizationHandler', () => {
 	})
 
 	/*
-	 * E17-S05 through this service's own call site. The revocation above is a mass logout an operator will
+	 * E17-S05 through this service's own call site. The revocation above is a mass logout an admin will
 	 * eventually have to explain, and the explanation is filed under the account the tombstone names — read
 	 * from the marker because by now the session hash the token pointed at is gone.
 	 *
 	 * ⚠️ **The line holds no token and no digest of one**, asserted here rather than only in the library: the
-	 * value written is what an operator's console renders and what a Redis dump would leak.
+	 * value written is what an admin's console renders and what a Redis dump would leak.
 	 */
 	it('files the replay on the account trail, with no token anywhere in the line', async () => {
 		hGetAll

@@ -10,7 +10,7 @@ import { Types } from 'mongoose'
  * model, the projection and the third guard are what this tier contributes.
  *
  * ⚠️ **The approval gate runs on every refresh, not at login only.** `findAccountForSession` gives
- * the reasoning for `disabled`/`deleted` and it holds identically here: an operator who parks a shop
+ * the reasoning for `disabled`/`deleted` and it holds identically here: an admin who parks a shop
  * owner mid-session should stop them within one access-token lifetime, not one refresh-token
  * lifetime. Until E01-S10 nothing read `waitApprov` at all, so parking an account did nothing to the
  * session it already held — and nothing to the next login either.
