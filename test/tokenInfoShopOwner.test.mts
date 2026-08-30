@@ -1,7 +1,7 @@
 import {
-	APPROVAL_GATE_FIELD_SHOP_OWNER,
-	OPERATOR_ONLY_FIELDS_SHOP_OWNER
-} from '@axiumine/marketplace-common/others/operatorOnlyFields'
+	ADMIN_ONLY_FIELDS_SHOP_OWNER,
+	APPROVAL_GATE_FIELD_SHOP_OWNER
+} from '@axiumine/marketplace-common/others/adminOnlyFields'
 import { Types } from 'mongoose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,7 +43,7 @@ describe('tokenInfoShopOwner', () => {
 	// stronger check — but it is also the reason a widening gets waved through: the fix for a failing
 	// exact-match assertion is to paste the new string in, and nothing on that line says which fields
 	// were never allowed to appear in it. This one says so, and says it in terms of a list owned by the
-	// repo that owns the shape, so a third operator-only field landing on `shopOwner` tightens this
+	// repo that owns the shape, so a third admin-only field landing on `shopOwner` tightens this
 	// service with no edit here. `stringContaining`, not a token split: `shopOwnerNotes` would be the
 	// same leak under a friendlier name.
 	it('projects no field the Admin tier owns', async () => {
@@ -51,7 +51,7 @@ describe('tokenInfoShopOwner', () => {
 
 		await tokenInfoShopOwner(_id)
 
-		for (const field of OPERATOR_ONLY_FIELDS_SHOP_OWNER)
+		for (const field of ADMIN_ONLY_FIELDS_SHOP_OWNER)
 			expect(findById).toHaveBeenCalledExactlyOnceWith({ _id }, expect.not.stringContaining(field))
 	})
 
@@ -70,7 +70,7 @@ describe('tokenInfoShopOwner', () => {
 
 	// BC-03 parks a shop owner pending review by raising this flag, and BC-01 is where that has to
 	// bite. Here rather than at login alone for the same reason `findAccountForSession` runs the
-	// disabled/deleted gate on every refresh: an operator parking an account mid-session should stop
+	// disabled/deleted gate on every refresh: an admin parking an account mid-session should stop
 	// it within one access-token lifetime, not one refresh-token lifetime.
 	it('throws unauthorized for a shopOwner awaiting approval', async () => {
 		lean.mockResolvedValueOnce({ _id, login: { email: 'owner@marketplace.test' }, waitApprov: true })
@@ -79,7 +79,7 @@ describe('tokenInfoShopOwner', () => {
 	})
 
 	// `waitApprov` is truthy-or-absent in the collection — `funShopOwnerUpdateStatus` `$unset`s it on
-	// approval so the operator queue can stay a `{ $exists: true }` query — but an explicit `false` is
+	// approval so the admin queue can stay a `{ $exists: true }` query — but an explicit `false` is
 	// a shape a document could carry, and refusing it would lock out every approved shop owner.
 	it.each([
 		['absent', {}],

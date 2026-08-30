@@ -15,4 +15,4 @@ export const refreshProjection =
 	'_id login.email login.firstLogin login.onboardingStep login.onboardingDone deleted disabled waitApprov'
 
 // Both field names in prose, the way this repo's own comments and BOUNDED_CONTEXT.md name them.
-export const boundary = 'BC-03 owns waitApprov: the approval queue is built on it, and notes: operator text.'
+export const boundary = 'BC-03 owns waitApprov: the approval queue is built on it, and notes: admin text.'

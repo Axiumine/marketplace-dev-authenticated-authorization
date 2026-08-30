@@ -45,7 +45,7 @@ alternatives, is the decision doc named above.
 - `TIER.shopOwner` — hardcoded at the one `resolveAuthorizationSession` call. Svc that could be told its
   own tier by a caller asserts nothing.
 - `tokenInfoShopOwner` adds `login.firstLogin`, `login.onboardingStep`, `login.onboardingDone` to the three
-  fields every tier reads. Shop owner has a multi-step onboarding an operator can interrupt; the other two
+  fields every tier reads. Shop owner has a multi-step onboarding an admin can interrupt; the other two
   tiers have none.
 - **`makeOnboardingData` omits `onboardingStep` rather than setting it to `undefined`.** The session is
   written to a Redis hash and `hSet` rejects an undefined value instead of skipping the field, so setting

@@ -27,7 +27,7 @@ What is still this repo's is the whole of what makes it the ShopOwner tier:
 - `TIER.shopOwner`, hardcoded at the one `resolveAuthorizationSession` call.
 - `tokenInfoShopOwner`'s projection: `login.firstLogin`, `login.onboardingStep` and `login.onboardingDone`
   on top of the three fields every tier reads. A shop owner is walked through a multi-step onboarding an
-  operator can interrupt; neither of the other two tiers has one.
+  admin can interrupt; neither of the other two tiers has one.
 - `makeOnboardingData`, and the `onboardingStep` it may add to the session. The field is omitted rather
   than set to `undefined` when there is no step: the session is written to a Redis hash, and `hSet` rejects
   an undefined value instead of skipping the field.
