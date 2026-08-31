@@ -12,7 +12,7 @@ import { Types } from 'mongoose'
  * ⚠️ **The approval gate runs on every refresh, not at login only.** `findAccountForSession` gives
  * the reasoning for `disabled`/`deleted` and it holds identically here: an admin who parks a shop
  * owner mid-session should stop them within one access-token lifetime, not one refresh-token
- * lifetime. Until E01-S10 nothing read `waitApprov` at all, so parking an account did nothing to the
+ * lifetime. Nothing read `waitApprov` at all before this gate, so parking an account did nothing to the
  * session it already held — and nothing to the next login either.
  *
  * `waitApprov` is read here and never written: BC-03 owns the write, and a ShopOwner-tier service

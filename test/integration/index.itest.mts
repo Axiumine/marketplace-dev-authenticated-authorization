@@ -189,7 +189,7 @@ async function seedRotatableSession(_id: mongoose.Types.ObjectId, lineage = sess
 }
 
 /**
- * The three lineage fields a real login stamps (E14-S01), and which `assertRefreshLineage` refuses a
+ * The three lineage fields a real login stamps, and which `assertRefreshLineage` refuses a
  * session without — so, exactly like `tier` above, a seed missing them is refused at the guard and
  * every test past it would fail for a reason unrelated to what it asserts.
  *
@@ -430,7 +430,7 @@ describe('refresh rotates the session on the cluster', () => {
 		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, tier: TIER.shopOwner })
 		// The lineage rides through the rotation unchanged — a family or a login date minted afresh here
 		// would hand the session an unlimited life one refresh at a time — and the successor names the
-		// access token minted beside it (E14-S06), asserted as the very key read two lines above: that
+		// access token minted beside it, asserted as the very key read two lines above: that
 		// field is what lets the next rotation, and every logout, find the access half without being
 		// handed it in a header.
 		expect(await redisClient.hGetAll(newRefreshKey)).toEqual({
@@ -450,7 +450,7 @@ describe('refresh rotates the session on the cluster', () => {
 		// One refresh token, one use.
 		expect(await redisClient.hGetAll(oldRefreshKey)).toEqual({})
 
-		// ⚠️ And the use left a marker (E14-S02). Without it a replay of the token just consumed is
+		// ⚠️ And the use left a marker. Without it a replay of the token just consumed is
 		// indistinguishable from ordinary expiry, which is the whole difference between "your session
 		// ended" and "someone else is holding your refresh token".
 		const tombstone = await redisClient.hGetAll(keyTombstone)
@@ -465,7 +465,7 @@ describe('refresh rotates the session on the cluster', () => {
 	})
 
 	/*
-	 * E14-S06 on the cluster. The access token the call arrives with is retired by the rotation, so it
+	 * Access-token retirement on the cluster. The access token the call arrives with is retired by the rotation, so it
 	 * stops working the moment its successor is minted instead of living out the rest of its 30-to-91
 	 * minute window in parallel.
 	 *
@@ -497,8 +497,8 @@ describe('refresh rotates the session on the cluster', () => {
 	})
 
 	/*
-	 * E14-S07 on the cluster. The cookie is still physically valid — `setLoginCookies` gives it the full
-	 * `REFRESH_TOKEN_EXPIRY`, and this story does not touch that — and the session is refused anyway,
+	 * The absolute cap on the cluster. The cookie is still physically valid — `setLoginCookies` gives it the full
+	 * `REFRESH_TOKEN_EXPIRY`, and nothing here touches that — and the session is refused anyway,
 	 * because the cap is enforced server-side against `originalLogin`. That is the difference the
 	 * "remember me" box has always implied and never had.
 	 */

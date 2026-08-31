@@ -21,8 +21,8 @@ import type { IContextAuthenticatedAuthorization } from '../../src/lib/auth/ICon
  * add a cookie/session detour that proves nothing this direct call doesn't already prove.
  */
 describe('refresh mutation catch arm against the real Redis cluster', () => {
-	// The lineage the rotation needs before it will mint anything (E14-S01), and which the per-family
-	// rate limiter (E14-S08) counts under. Fixed rather than random so the counter this run touches on
+	// The lineage the rotation needs before it will mint anything, and which the per-family
+	// rate limiter counts under. Fixed rather than random so the counter this run touches on
 	// the live cluster is a key the drain below can name.
 	const FAMILY_ID = 'itest-catch-arm-family'
 
@@ -72,7 +72,7 @@ describe('refresh mutation catch arm against the real Redis cluster', () => {
 		expect(await redisClient.get(pingKey)).toBe('pong')
 		await redisClient.del(pingKey)
 
-		// The mint attempt was counted before it failed (E14-S08), and that counter is real state on the
+		// The mint attempt was counted before it failed, and that counter is real state on the
 		// cluster. It carries an hour's TTL of its own, so this only stops a re-run inside the hour from
 		// inheriting the previous run's count.
 		await redisClient.del(`${process.env.REDIS_KEY}rl:refresh:family:${sha256Hex(FAMILY_ID)}`)

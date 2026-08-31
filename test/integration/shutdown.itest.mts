@@ -85,7 +85,7 @@ describe('production hardening actually applies to a real server', () => {
 			// `validationRules: buildValidationRules()` is evaluated once, inside createServer(), so the
 			// introspection rule this test is about is already fixed on the running Apollo — while the
 			// request below still has to get past authenticatedAuthorizationHandler, whose introspection
-			// bypass E13-S11 disables outside `development` and `test`. Booted as production, called as
+			// bypass is disabled outside `development` and `test`. Booted as production, called as
 			// test: exactly what the test name claims, and the only way to reach the schema here without
 			// seeding an encrypted account. The bypass's own production behaviour is asserted below.
 			process.env.NODE_ENV = realNodeEnv
@@ -111,7 +111,7 @@ describe('production hardening actually applies to a real server', () => {
 	})
 
 	/*
-	 * E13-S11 over real HTTP, at the comparison site all three authorization services share. The bypass
+	 * The environment gate over real HTTP, at the comparison site all three authorization services share. The bypass
 	 * admits a request whose cookie signature is valid but whose session is gone — the exact shape the
 	 * test above relies on — and outside `development` and `test` it must stop admitting it, answering
 	 * with the 498 a caller sending no code at all already gets. The server boots normally here: the
