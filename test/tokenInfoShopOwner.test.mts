@@ -39,7 +39,7 @@ describe('tokenInfoShopOwner', () => {
 		expect(checkUserAuthorizationDisDel).toHaveBeenCalledExactlyOnceWith(user)
 	})
 
-	// E01-S10. The literal above already fails the moment the projection changes at all, which is the
+	// The literal above already fails the moment the projection changes at all, which is the
 	// stronger check — but it is also the reason a widening gets waved through: the fix for a failing
 	// exact-match assertion is to paste the new string in, and nothing on that line says which fields
 	// were never allowed to appear in it. This one says so, and says it in terms of a list owned by the

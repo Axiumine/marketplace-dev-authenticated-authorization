@@ -236,7 +236,7 @@ export async function start() {
 		await Promise.all([RedisConnect(), MongoDBConnect()])
 
 		/****************
-		 * Hash-field TTLs (E15-S03)
+		 * Hash-field TTLs
 		 *
 		 * The first thing asked of the connection, because every rotation this service serves files the
 		 * successor session under its account and arms an `HEXPIRE` on the new field — and Redis does not

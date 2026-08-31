@@ -10,12 +10,12 @@ import type { IContextAuthenticatedAuthorization } from '../src/lib/auth/IContex
 const hSet = vi.fn()
 const expire = vi.fn()
 const del = vi.fn()
-// The session index's two commands (E15-S03): the field TTL armed on the successor, and the removal of
+// The session index's two commands: the field TTL armed on the successor, and the removal of
 // the predecessor's field. A mock without them fails the whole suite the same way `incr` did.
 const hExpire = vi.fn()
 const hDel = vi.fn()
 const sAdd = vi.fn()
-// The per-family mint limiter's two commands (E14-S08). The rotation counts itself before it mints, so
+// The per-family mint limiter's two commands. The rotation counts itself before it mints, so
 // a mock without these fails the whole suite with `store.incr is not a function`.
 const incr = vi.fn()
 const ttl = vi.fn()
@@ -43,7 +43,7 @@ const { refresh } = await import('../src/graphQLApi/schema/mutations/refresh.mts
 const OID = '507f1f77bcf86cd799439011'
 const OLD_REFRESH = 'refresh:old-refresh-token'
 /*
- * Where a rotated session is written since E13-S01: the shared prefix plus the SHA-256 of the
+ * Where a rotated session is written: the shared prefix plus the SHA-256 of the
  * **prefixed** token. `access:` and `refresh:` live inside the digest — they are what tells the two
  * hashes apart — and the digests are written out as literals, computed elsewhere: hashing the tokens
  * here with the call the code makes would agree with it about any algorithm, including a mutated one.
@@ -51,39 +51,39 @@ const OLD_REFRESH = 'refresh:old-refresh-token'
 const keyAccess = 'test:bacb9a67a033bad50630a548fee3b22ad960f975f52984a3b3be8f76aeab972e'
 const keyRefresh = 'test:dae3d6f8bfcf40ccb5fd3f8e02ddc6c84c3ce03c513fdfb241ee09ec53637fc7'
 // The *used* refresh token, deleted on rotation: a rotation that left it alive would leave the token it
-// just retired still usable. One shape only, since E13-S10 removed the raw-token key beside it.
+// just retired still usable. One shape only — the raw-token key that once stood beside it is gone.
 const oldKey = 'test:c934d70b631c47c68f5194a79773e210010efc6874a72193dd1c1e55032ddd6c'
-// The marker left behind for the consumed refresh token (E14-S02) — same digest as `oldKey`, under the
+// The marker left behind for the consumed refresh token — same digest as `oldKey`, under the
 // `used:` namespace, so a replay of that token finds the marker after missing the session.
 const tombstoneKey = 'test:used:c934d70b631c47c68f5194a79773e210010efc6874a72193dd1c1e55032ddd6c'
 
 /*
- * The access token this call arrives with, `access:` prefix included, and the key it hashes to
- * (E14-S06). The resolver reads it off the `Authorization` header the same way the logout handler
+ * The access token this call arrives with, `access:` prefix included, and the key it hashes to.
+ * The resolver reads it off the `Authorization` header the same way the logout handler
  * does, so the rotation can retire it instead of leaving it live for the rest of its window.
  */
 const PRESENTED_ACCESS = 'access:presented-access-token'
 const presentedAccessKey = 'test:afe13c669207703740f5fefe1e47e9ca0c5a0b2efb4d5afc2f00750a57f7601e'
 
 // The lineage the session being rotated already carries, and which this rotation must propagate
-// unchanged (E14-S01): a family stamped afresh would make the chain unrevocable, an `originalLogin`
+// unchanged: a family stamped afresh would make the chain unrevocable, an `originalLogin`
 // stamped afresh would make the absolute cap unreachable.
 const NOW = 1_754_784_000_000
 const FAMILY_ID = '4b1a4a5e-0d3a-4a2f-9a5a-2f0f6a1b8c3d'
 const LINEAGE = { familyId: FAMILY_ID, originalLogin: `${NOW - 3_600_000}`, sessionCapDays: '30' }
 const familyKey = `test:family:${FAMILY_ID}`
 /*
- * The lineage's *mint counter* (E14-S08) — a different key from the family set above, and a different
+ * The lineage's *mint counter* — a different key from the family set above, and a different
  * digest: `sha256(FAMILY_ID)`, written out as a literal rather than computed here. Twenty pairs an hour,
  * counted before the rotation writes anything.
  */
 const rateLimitKey = 'test:rl:refresh:family:eb8e9661945f5feea4260ffdbf474a5125cc7eb0cad7d50dbfda549221efc2f7'
 
 /*
- * The account's session index (E15-S02, pruned by E15-S03): one hash per account, named by tier *and* id,
+ * The account's session index: one hash per account, named by tier *and* id,
  * one field per live session. A rotation touches two fields of it — the successor's is written and armed,
  * the predecessor's is removed — and both field names are the bodies of the session keys above, because
- * the revocation E15-S04 builds rebuilds `${REDIS_KEY}${field}` and never sees a token.
+ * the revocation path rebuilds `${REDIS_KEY}${field}` and never sees a token.
  */
 const indexKey = `test:idx:shopOwner:${OID}`
 const newIndexField = keyRefresh.slice('test:'.length)
@@ -140,12 +140,12 @@ describe('refresh mutation', () => {
 		// The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
 		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
 		//
-		// ⚠️ **…and the key of the access token this rotation just minted** (E14-S06). A session is a pair,
+		// ⚠️ **…and the key of the access token this rotation just minted**. A session is a pair,
 		// and the refresh half is the one that outlives a request, so it is the half that has to know the
 		// name of the other: the successor's key is re-stamped here on every rotation, which is what lets
 		// the *next* one retire this access token without being handed it in an `Authorization` header.
 		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE, accessKey: keyAccess })
-		// The tombstone names the account as well as the lineage (E17-S05): a replay is detected after this
+		// The tombstone names the account as well as the lineage: a replay is detected after this
 		// rotation deleted the session hash, so this marker is the only place the reuse trail can learn whose
 		// sessions it just ended. Neither field is a credential — the tier is a constant, the id is public.
 		expect(hSet).toHaveBeenCalledWith(tombstoneKey, {
@@ -178,7 +178,7 @@ describe('refresh mutation', () => {
 		expect(expire).toHaveBeenCalledWith(rateLimitKey, 3600)
 
 		/*
-		 * ⚠️ **The successor's field carries what is LEFT of the cap, not a fresh one** (E15-S03). This
+		 * ⚠️ **The successor's field carries what is LEFT of the cap, not a fresh one**. This
 		 * lineage logged in an hour ago under a thirty-day cap, so the field expires in twenty-nine days and
 		 * twenty-three hours — and the number is the point: rearming the full cap on every rotation would
 		 * keep a session refreshed hourly listed for as long as it kept refreshing, which is exactly the
@@ -187,7 +187,7 @@ describe('refresh mutation', () => {
 		expect(hExpire).toHaveBeenCalledExactlyOnceWith(indexKey, newIndexField, FIELD_TTL)
 		expect(expire).toHaveBeenCalledWith(indexKey, INDEX_TTL)
 		/*
-		 * ⚠️ **The predecessor's field goes, and it goes AFTER the session key it names** (E15-S03).
+		 * ⚠️ **The predecessor's field goes, and it goes AFTER the session key it names**.
 		 * Unfiled first, a still-usable refresh token is listed nowhere for the width of the window between
 		 * the two calls, and a revocation running in it misses the session entirely. Rotation is where that
 		 * window would be widest — it is the one operation that runs on every active session, all day.
@@ -198,14 +198,14 @@ describe('refresh mutation', () => {
 		expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
 		// Two single-key deletes (BCON-08): the access token the call was made with, then the refresh token
 		// it consumed. Two digests land in different cluster slots, so one multi-key del would not survive
-		// a cluster — and there is no third, since E13-S10 took the raw-token shape out.
+		// a cluster — and there is no third: the raw-token shape is gone.
 		expect(del.mock.calls).toEqual([[presentedAccessKey], [oldKey]])
 		expect(oldKey).not.toContain(OLD_REFRESH)
 		expect(captureException).not.toHaveBeenCalled()
 	})
 
 	/*
-	 * E14-S06's tolerant half. A client whose access token expired before it got round to refreshing
+	 * The tolerant half of the access-token retirement. A client whose access token expired before it got round to refreshing
 	 * sends no `Authorization` header at all — the ordinary case, not an error — and the rotation then
 	 * deletes nothing extra rather than computing a key from an empty string and deleting whatever that
 	 * happens to hash to.
@@ -241,7 +241,7 @@ describe('refresh mutation', () => {
 	})
 
 	it('rolls back and rethrows when the expiry write fails, after the sessions were stored', async () => {
-		// ⚠️ The first `expire` of the call is the rate limiter arming its own window (E14-S08), and it has
+		// ⚠️ The first `expire` of the call is the rate limiter arming its own window, and it has
 		// nothing to do with the session. The TTL write this test is about is the second one.
 		expire.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('expire failed'))
 

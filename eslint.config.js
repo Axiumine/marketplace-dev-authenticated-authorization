@@ -9,7 +9,7 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts,ts,cts,mts}'))
 
 /*
- * E01-S10, revised by the approval-gate fix. `waitApprov` used to be banned here in all four shapes,
+ * Revised by the approval-gate fix. `waitApprov` used to be banned here in all four shapes,
  * on the reasoning that no BC-01 service had any business naming BC-03's field. That reasoning had a
  * hole in it: nothing read the flag anywhere on the platform, so an admin parking a shop owner
  * pending review changed nothing — the account logged in and kept working. The gate now reads it, so
@@ -26,11 +26,11 @@ const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts
 const WAIT_APPROV_NO_WRITE = {
 	selector: "Property[key.name='waitApprov']",
 	message:
-		"E01-S10: `shopOwner.waitApprov` is BC-03's to write, never this tier's — a service that could raise or clear the approval flag could approve its own account. Reading it is what checkShopOwnerApproval in marketplace-common does, and both BC-01 gates call it. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER."
+		"`shopOwner.waitApprov` is BC-03's to write, never this tier's — a service that could raise or clear the approval flag could approve its own account. Reading it is what checkShopOwnerApproval in marketplace-common does, and both BC-01 gates call it. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER."
 }
 
 /*
- * E01-S15. The pair ADR-034 replaced, refused by name so that "nothing reads them" stops being a claim
+ * The pair ADR-034 replaced, refused by name so that "nothing reads them" stops being a claim
  * about how the code happens to be written today. The signing keys are one Redis record wrapped under
  * KEYGRIP_KEK; a service that read KEYGRIP_KEY_1 out of its environment again would sign cookies with a
  * key its siblings do not have, and the failure is a browser that is silently logged out rather than an
@@ -48,12 +48,12 @@ const KEYGRIP_KEY_NO_ENV_READ = [
 	{
 		selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.name=/^KEYGRIP_KEY_/]",
 		message:
-			'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
+			'KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
 	},
 	{
 		selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.value=/^KEYGRIP_KEY_/]",
 		message:
-			'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
+			'KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
 	}
 ]
 
@@ -70,7 +70,7 @@ const KEYGRIP_KEY_NO_ENV_READ = [
  * owner's session within one access-token lifetime. A rule refusing the read would refuse the
  * enforcement. Hence four write shapes and no read shape: the object-literal key a `$set` is built
  * from, the same key quoted, and both assignment forms (`owner.disabled = false`,
- * `owner['disabled'] = false`), which is the shape the E12-S04 audit actually found for
+ * `owner['disabled'] = false`), which is the shape the telemetry audit actually found for
  * `rejectUnauthorized` and which a `Property`-only rule passes.
  *
  * `ObjectExpression >` rather than a bare `Property`, because an `ObjectPattern` is a `Property` too and
@@ -100,24 +100,24 @@ const RESTRICTED_SYNTAX = [
 	{
 		selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
 		message:
-			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
 	},
 	{
 		selector: "Property[key.name='rejectUnauthorized']",
 		message:
-			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
 	},
 	{
 		selector: "Property[key.value='rejectUnauthorized']",
 		message:
-			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
 	},
 	{
 		selector: "Property[key.name='sendDefaultPii']",
 		message:
-			'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
+			'the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
 	},
-	// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
+	// Two settings one word from being reversed, with nothing else that would
 	// notice. `!=` rather than a positive match because the shape to refuse is *any other
 	// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
 	// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
@@ -125,24 +125,24 @@ const RESTRICTED_SYNTAX = [
 	{
 		selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
 		message:
-			"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
+			"the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
 	},
 	{
 		selector: "ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
 		message:
-			'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
+			'`beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
 	},
 	{
 		selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
 		message:
-			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
 	},
 	{
 		selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
 		message:
-			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
 	},
-	// E01-S10 — the `shopOwner` field the Admin tier owns outright, refused here so that "no
+	// The `shopOwner` field the Admin tier owns outright, refused here so that "no
 	// ShopOwner-tier service selects it" stops being a claim about how the code happens to be
 	// written today. `notes` is free text an admin wrote *about* a named person, encrypted at rest
 	// and the one encrypted field on the platform whose subject never gets to read it. The approval
@@ -166,7 +166,7 @@ const RESTRICTED_SYNTAX = [
 		selector:
 			"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
 		message:
-			"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an admin wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is ADMIN_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+			"`shopOwner.notes` is the Admin tier's. It is what an admin wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is ADMIN_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
 	}
 ]
 
@@ -221,7 +221,7 @@ export default [
 			'simple-import-sort/exports': 'error'
 		}
 	},
-	// E12-S04 — neither setting this audit removed can come back by accident.
+	// Neither setting the telemetry audit removed can come back by accident.
 	//
 	// Core `no-restricted-syntax`, in this file rather than in `@axiumine/eslint-config-be`: the shared
 	// package is a repo outside these sixteen and ships to unrelated consumers, so a Sentry-specific rule

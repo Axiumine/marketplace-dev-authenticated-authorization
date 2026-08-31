@@ -16,7 +16,7 @@ export const refresh = {
 		// token this call was made with, and roll the two new keys back on any failure — is identical
 		// in all three authorization services and lives in `refreshSessionTokens`. Sentry is passed in
 		// rather than imported there, so that marketplace-common does not drag it into every consumer.
-		// ⚠️ **The access token the call arrived with, `access:` prefix and all** (E14-S06). Read exactly as
+		// ⚠️ **The access token the call arrived with, `access:` prefix and all**. Read exactly as
 		// `authorizationLogoutHandler` reads it — the header, `Bearer ` stripped — so that the rotation can
 		// retire it instead of leaving it live for the rest of its 30-to-90-minute window alongside its own
 		// successor. A client whose access token has already expired sends none, and that is the ordinary
