@@ -25,10 +25,10 @@ describe('start() when MongoDB refuses the connection', () => {
 	})
 
 	it('logs, tears down the datasources that did come up, and exits 1', async () => {
-		// Set truthy so the failure happens where it is meant to, inside MongoDBConnect()'s real
-		// driver. MONGODB_URI is in REQUIRED_ENV_VARS now, so leaving it unset would fail in the env
-		// guard instead — which is the *other* test below, and a different code path entirely.
-		process.env.MONGODB_URI = 'not-a-mongodb-uri'
+		// Shaped like a connection string, so both env guards pass it, and refused by the driver
+		// itself, which cannot read `99999` as a port. That keeps the failure where this test wants it —
+		// inside MongoDBConnect()'s real driver — and off the two guards, which the tests below own.
+		process.env.MONGODB_URI = 'mongodb://127.0.0.1:99999/dbRefused'
 
 		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
