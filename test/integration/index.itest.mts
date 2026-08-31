@@ -21,7 +21,6 @@ import { ENDPOINT, start } from '../../src/index.mts'
 import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
 
 const REDIS_KEY = process.env.REDIS_KEY as string
-const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
 
 // accessTokenExpiry() returns floor((random() * 61 + 30) * 60) — a random 30-to-91-minute
 // window — so the access TTL can only be asserted as a range. REFRESH_TOKEN_EXPIRY is fixed.
@@ -42,12 +41,15 @@ function signedCookie(refresh: string): string {
 	return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
 }
 
-// The introspection code is NOT a substitute for the cookie: verifySignedRefreshToken runs first
-// and rejects a request with no cookie before the code is ever read. The bypass only rescues a
-// correctly signed cookie whose Redis session no longer exists — so service-to-service calls send
-// both. Every headers object below reflects that ordering.
-function bypassHeaders() {
-	return { cookie: signedCookie(randomUUID()), 'x-introspectioncode': INTROSPECTION_CODE }
+// What a caller of this service carries, and the only thing it accepts: a signed refresh cookie whose
+// session is on the cluster and whose `_id` names a real shopOwner. The handler is mounted in front of
+// Apollo and of the health route alike, so every request below needs one — there is no header that
+// stands in for it.
+async function authHeaders() {
+	const { _id } = await seedShopOwner()
+	const refresh = await seedSession(_id)
+
+	return { cookie: signedCookie(refresh) }
 }
 
 let keygripWatch: NodeJS.Timeout
@@ -541,8 +543,8 @@ describe('refresh rotates the session on the cluster', () => {
 })
 
 describe('GraphQL over HTTP', () => {
-	it('serves the query once the introspection code rescues the expired session', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', bypassHeaders())
+	it('serves the query to a caller carrying a live session', async () => {
+		const { status, json } = await gql('{ helloRefresh { txt } }', await authHeaders())
 
 		expect(status).toBe(200)
 		expect(json.errors).toBeUndefined()
@@ -552,14 +554,14 @@ describe('GraphQL over HTTP', () => {
 	// Introspection stays open outside production (buildValidationRules returns no rules), and the
 	// schema it reports is the one really assembled in createServer — not a copy rebuilt by a test.
 	it('exposes the assembled schema through introspection', async () => {
-		const { json } = await gql('{ __schema { queryType { name } mutationType { name } } }', bypassHeaders())
+		const { json } = await gql('{ __schema { queryType { name } mutationType { name } } }', await authHeaders())
 
 		expect(json.errors).toBeUndefined()
 		expect(json.data).toEqual({ __schema: { queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } } })
 	})
 
 	it('rejects a GET on the GraphQL endpoint (csrfPrevention / method not allowed)', async () => {
-		const res = await fetch(`${base}${ENDPOINT}?query=%7B__typename%7D`, { headers: bypassHeaders() })
+		const res = await fetch(`${base}${ENDPOINT}?query=%7B__typename%7D`, { headers: await authHeaders() })
 
 		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
@@ -567,7 +569,7 @@ describe('GraphQL over HTTP', () => {
 
 describe('non-GraphQL routes', () => {
 	it('serves /health once the cookie gate is satisfied', async () => {
-		const res = await fetch(`${base}/health`, { headers: bypassHeaders() })
+		const res = await fetch(`${base}/health`, { headers: await authHeaders() })
 
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as { status: string; timestamp: string }
@@ -575,7 +577,7 @@ describe('non-GraphQL routes', () => {
 	})
 
 	it('falls through to 404 for an unknown path', async () => {
-		const res = await fetch(`${base}/nope`, { headers: bypassHeaders() })
+		const res = await fetch(`${base}/nope`, { headers: await authHeaders() })
 
 		expect(res.status).toBe(404)
 	})

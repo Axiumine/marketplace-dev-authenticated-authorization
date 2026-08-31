@@ -122,7 +122,7 @@ describe('checkRequiredEnv', () => {
 	 * a `toContain` passes an addition, so neither notices the change. The order is asserted too — the
 	 * boot names the *first* missing variable, and that is the one an admin goes looking for.
 	 */
-	it('requires exactly these 16 variables, in this order', () => {
+	it('requires exactly these 15 variables, in this order', () => {
 		expect(REQUIRED_ENV_VARS).toStrictEqual([
 			'PORT',
 			'KEYGRIP_KEK',
@@ -138,8 +138,7 @@ describe('checkRequiredEnv', () => {
 			'REDIS_KEY',
 			'MONGODB_URI',
 			'CSFLE_MASTER_KEY_PATH',
-			'CSFLE_KEY_VAULT_NAMESPACE',
-			'INTROSPECTION_CODE'
+			'CSFLE_KEY_VAULT_NAMESPACE'
 		])
 	})
 
@@ -161,13 +160,13 @@ describe('checkRequiredEnv', () => {
 	 * MONGODB_URI — start() calls MongoDBConnect(), so without the guard a missing URI surfaces as a
 	 * driver error from inside the try, reported to Sentry and exited 1, instead of one line before
 	 * anything connects.
-	 * INTROSPECTION_CODE — the service-to-service bypass compares the header against
-	 * `${process.env.INTROSPECTION_CODE}`, which stringifies an unset value to 'undefined' and admits
-	 * any caller sending that literal string.
+	 * CSFLE_KEY_VAULT_NAMESPACE — ADR-029, and the last entry in the list: a service that booted
+	 * without it reads no personal field at all, and every query that touches one throws at its first
+	 * use instead of at startup.
 	 */
-	it('requires MONGODB_URI and INTROSPECTION_CODE by name', () => {
+	it('requires MONGODB_URI and CSFLE_KEY_VAULT_NAMESPACE by name', () => {
 		expect(REQUIRED_ENV_VARS).toContain('MONGODB_URI')
-		expect(REQUIRED_ENV_VARS).toContain('INTROSPECTION_CODE')
+		expect(REQUIRED_ENV_VARS).toContain('CSFLE_KEY_VAULT_NAMESPACE')
 	})
 
 	/*
