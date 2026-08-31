@@ -62,13 +62,7 @@ export const REQUIRED_ENV_VARS = [
 	// than being left to fail later: a service that boots without them cannot read a single personal
 	// field, and every query that touches one throws on its first use instead of at startup.
 	'CSFLE_MASTER_KEY_PATH',
-	'CSFLE_KEY_VAULT_NAMESPACE',
-	// The service-to-service bypass compares against `${process.env.INTROSPECTION_CODE}`, so an UNSET
-	// value makes that comparison `'undefined' === 'undefined'` and any caller sending the literal
-	// string `undefined` is accepted. Narrow here — the bypass is consulted only after
-	// verifySignedRefreshToken() has already returned a token, so it stands in for a session and never
-	// for the signature — but a secret whose absence weakens a check must be required, not optional.
-	'INTROSPECTION_CODE'
+	'CSFLE_KEY_VAULT_NAMESPACE'
 ]
 
 /**

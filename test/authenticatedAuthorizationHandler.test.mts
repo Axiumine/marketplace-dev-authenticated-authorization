@@ -123,7 +123,6 @@ describe('authenticatedAuthorizationHandler', () => {
 	afterEach(() => vi.useRealTimers())
 
 	// AB-04: a request carrying no credential is refused
-	// AB-10: no x-introspectioncode at all leaves the ordinary refusal exactly as it is
 	it('rejects the request without a cookie', async () => {
 		const ctx = makeCtx({})
 
@@ -282,82 +281,6 @@ describe('authenticatedAuthorizationHandler', () => {
 
 		expect(sMembers).not.toHaveBeenCalled()
 		expect(del).not.toHaveBeenCalled()
-	})
-
-	// AB-08: a valid x-introspectioncode is accepted with no credential at all, and reads no session
-	it('lets a valid x-introspectioncode through an expired session without touching Mongo', async () => {
-		hGetAll.mockResolvedValueOnce({})
-
-		const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })
-
-		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).resolves.toBe('next')
-		expect(tokenInfoShopOwner).not.toHaveBeenCalled()
-		expect(ctx.state.user).toBeUndefined()
-		expect(next).toHaveBeenCalledTimes(1)
-	})
-
-	// AB-09: a wrong x-introspectioncode is refused
-	it('ignores a wrong x-introspectioncode', async () => {
-		hGetAll.mockResolvedValueOnce({})
-
-		const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'wrong-code' })
-
-		await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
-	})
-
-	/*
-	 * The introspection bypass, tested in the four non-authorization services until the auth-boundary contract. The
-	 * bypass is a development convenience and outside `development` and `test` it does not exist: the gate
-	 * is read before the code is, so the configured value is never consulted and the header is worth exactly
-	 * what a header nobody sent is worth.
-	 */
-	describe('outside the environment allowlist', () => {
-		afterEach(() => {
-			vi.unstubAllEnvs()
-		})
-
-		/** The rejection flattened to what a client actually sees. */
-		const refusal = async (header: Record<string, string>) => {
-			try {
-				await authenticatedAuthorizationHandler(keys)(makeCtx(header), next)
-			} catch (error) {
-				const { message, extensions } = error as { message: string; extensions: unknown }
-				return { message, extensions }
-			}
-			throw new Error('expected the handler to reject, and it returned')
-		}
-
-		// Every value below is admitted by the `NODE_ENV !== 'production'` form this gate replaced, and each
-		// is a shape a real deploy produces: a container runtime that exports nothing, a shell that exports
-		// an empty string, a capital letter, a staging box nobody ever classified.
-		// AB-11: a valid x-introspectioncode is refused outside the environment allowlist, indistinguishably from none
-		it.each([['production'], ['staging'], ['Production'], [''], [undefined]])(
-			'refuses a valid x-introspectioncode under NODE_ENV=%o',
-			async (environment) => {
-				vi.stubEnv('NODE_ENV', environment)
-				hGetAll.mockResolvedValue({})
-
-				const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })
-
-				await expect(authenticatedAuthorizationHandler(keys)(ctx, next)).rejects.toThrow()
-
-				expect(tokenInfoShopOwner).not.toHaveBeenCalled()
-				expect(ctx.state.user).toBeUndefined()
-				expect(next).not.toHaveBeenCalled()
-			}
-		)
-
-		// ⚠️ The refusal is the handler's own, down to the status and the description. A gate that threw
-		// something of its own would tell the caller that the code was right and only the environment
-		// wrong — which is the one thing the response must not distinguish.
-		it('refuses it with the error a request carrying no code at all gets', async () => {
-			vi.stubEnv('NODE_ENV', 'production')
-			hGetAll.mockResolvedValue({})
-
-			expect(await refusal({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })).toEqual(
-				await refusal({ cookie: signedCookie() })
-			)
-		})
 	})
 
 	// ⚠️ The cross-tier boundary. All nine services read Redis under the same `REDIS_KEY` prefix —

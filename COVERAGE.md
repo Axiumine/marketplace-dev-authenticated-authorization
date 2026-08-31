@@ -72,8 +72,7 @@ from `.env` (loaded by the sources' own `dotenv.config()`). It overrides only th
 (`REDIS_KEY=marketplaceDev:itest:authenticatedAuthorization:`, a per-service, ACL-allowed namespace —
 the `marketplaceDev:itest:` stem is shared across the platform because the Redis ACL grants the test
 user exactly that pattern, but the third segment is unique to this service so its integration
-suite can run at the same time as the other six's), `PORT=0` (ephemeral) and `INTROSPECTION_CODE`
-(so the real one is never needed by, or visible to, the suite).
+suite can run at the same time as the other six's) and `PORT=0` (ephemeral).
 Run just one side with `yarn test:unit` / `yarn test:integration`.
 
 Consequence: the coverage gate — and therefore `pre-push` and `./qodana.sh` — needs both the
@@ -168,26 +167,19 @@ so there is no way to keep the well-tested functions in scope without also pulli
 above).
 
 Everything else — the Koa auth middleware, the `refresh` resolver, the Mongo lookup, the DB
-teardown — is fully mutated. Current state: **70 mutants, 70 killed, 0 survived**, ~35 s.
+teardown — is fully mutated. Current state: **every tested mutant killed, 0 survived**, score 100.00,
+~35 s. The instrumented total moves with the source, so read it off the run rather than from here.
 
 ### Equivalent mutants
 
 Three mutants are annotated in `src/` with `// Stryker disable next-line`, each above a comment
-carrying the reachability argument:
+carrying the reachability argument, and all three are in one file:
 
 - `graphQLApi/schema/mutations/refresh.mts` — the `status` initializer, and the two token-clearing
   assignments (`refreshToken = accessToken = ''`, `accessToken = ''`) inside the `catch` block.
   `tryCatchRethrow(e)` throws unconditionally in every branch it has, so the `catch` block never
   reaches the function's one `return` statement; none of these three values can ever be observed
   by a caller.
-- `lib/auth/authenticatedAuthorizationHandler.mts` — the `?.` reading
-  `ctx.request.header['x-introspectioncode']`. Reaching that branch requires
-  `verifySignedRefreshToken()` to have already read `ctx.request.header?.cookie` as a defined
-  string without throwing, which is impossible unless `ctx.request.header` is itself defined — so
-  the guard can never short-circuit. (Pulled out of the `else if` test into its own `const` so the
-  directive comment attaches to an unambiguous line — placing it directly above an inline
-  `} else if (...)` left the mutant Survived, because the comment attached to the enclosing
-  `if`/`else` rather than to the condition.)
 
 Do not add to this list without the same kind of argument. "I could not think of a test" is not
 an equivalence proof.

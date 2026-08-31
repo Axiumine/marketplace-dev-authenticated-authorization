@@ -10,30 +10,6 @@
 # sets a cookie, it does not log one, but its second argument is named
 # `refreshToken` and would match the pattern below on an unrestricted sink).
 rules:
-  # x-introspectioncode / INTROSPECTION_CODE is a service-to-service secret
-  # that bypasses the token check (see CLAUDE.md). It must never reach logs.
-  - id: marketplace-no-log-introspection-code
-    languages: [typescript, javascript]
-    severity: ERROR
-    message: >-
-      Do not log the introspection code — it is a service-to-service secret (see CLAUDE.md, "never log x-introspectioncode"). Remove it from the log call.
-    metadata:
-      category: security
-      confidence: MEDIUM
-      references:
-        - CLAUDE.md
-    patterns:
-      - pattern-either:
-          - pattern: console.$M(..., $ARG, ...)
-          - patterns:
-              - pattern: $L.$M(..., $ARG, ...)
-              - metavariable-regex:
-                  metavariable: $L
-                  regex: (?i)^(logger|log)$
-      - metavariable-regex:
-          metavariable: $ARG
-          regex: (?i)(introspection|x-introspectioncode|introspectioncode)
-
   # Opaque access/refresh tokens live in Redis sessions and signed cookies.
   # Logging them defeats the whole point of opaque tokens.
   - id: marketplace-no-log-auth-token
