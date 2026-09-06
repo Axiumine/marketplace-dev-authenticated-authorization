@@ -9,6 +9,48 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts,ts,cts,mts}'))
 
 /*
+ * BCON-08 and NFR-SC03, and RISK_REGISTER R32.
+ *
+ * Redis is deployed as a cluster, where `DEL k1 k2` is refused with `CROSSSLOT Keys in request don't hash
+ * to the same slot` unless every key lands in the same slot — and nothing here arranges that, because the
+ * session and rate-limit keys are digests of tokens. One key per call is therefore not a style
+ * preference: the batched form is what every non-cluster Redis codebase writes out of habit,
+ * `@redis/client` types it as legal (`del(keys: RedisArgument | Array<RedisArgument>)`), TypeScript is
+ * happy, and it fails at runtime on the path that revokes a session. Until this block existed the
+ * convention was prose in three documents and machine-checked nowhere.
+ *
+ * Three selectors, because the batch arrives three ways — `del(a, b)`, `del([a, b])`, `del(...keys)` —
+ * and a rule carrying one of them passes the other two. Keyed on the method name alone rather than on
+ * `redisClient`, because the client is injected here: the shared session helpers call `store.del(...)`
+ * through `ISessionWriteStore`, and a selector naming the client would see none of them. What that width
+ * costs is that any `.del()` or `.unlink()` on an unrelated object is held to the same shape — including
+ * the callback form of `fs.unlink`, which nothing on this platform uses. A call that genuinely needs two
+ * arguments is a decision worth a reviewer, which is what failing here buys.
+ *
+ * ⚠️ **An identifier holding a pre-built array is invisible to all three.** `const keys = [a, b]` then
+ * `store.del(keys)` is a syntax tree this rule cannot distinguish from the single-key call, so the block
+ * narrows the ways in rather than closing them — RISK_REGISTER R32 stays open at its measured level for
+ * that reason.
+ */
+const REDIS_DEL_MESSAGE =
+	'BCON-08: one Redis key per `del`. Redis is a cluster, so a multi-key `DEL`/`UNLINK` throws CROSSSLOT unless every key hashes to the same slot, which digested session and rate-limit keys never do. Delete one key per call and batch with `Promise.all(keys.map((key) => store.del(key)))` — the shape the session helpers already carry. NFR-SC03, RISK_REGISTER R32.'
+
+const REDIS_ONE_KEY_PER_DEL = [
+	{
+		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/][arguments.length>1]',
+		message: REDIS_DEL_MESSAGE
+	},
+	{
+		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > ArrayExpression.arguments',
+		message: REDIS_DEL_MESSAGE
+	},
+	{
+		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > SpreadElement.arguments',
+		message: REDIS_DEL_MESSAGE
+	}
+]
+
+/*
  * Revised by the approval-gate fix. `waitApprov` used to be banned here in all four shapes,
  * on the reasoning that no BC-01 service had any business naming BC-03's field. That reasoning had a
  * hole in it: nothing read the flag anywhere on the platform, so an admin parking a shop owner
@@ -279,7 +321,7 @@ export default [
 	// misses the other.
 	{
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
+			'no-restricted-syntax': ['error', ...REDIS_ONE_KEY_PER_DEL, ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
 		}
 	},
 	// The write ban rides on top of the shared entries rather than replacing them: a second config
@@ -290,6 +332,7 @@ export default [
 		rules: {
 			'no-restricted-syntax': [
 				'error',
+				...REDIS_ONE_KEY_PER_DEL,
 				...RESTRICTED_SYNTAX,
 				...ITEMCATEGORY_NO_WRITE,
 				WAIT_APPROV_NO_WRITE,
