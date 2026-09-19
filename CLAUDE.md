@@ -8,50 +8,27 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 
 | Need | File |
 |---|---|
-| what this svc is | [`README.md`](./README.md) |
-| hook internals, gate order, node selection | [`REPO.md`](./REPO.md) |
+| what this svc is, what code still lives here and why | [`README.md`](./README.md) |
+| hook internals, gate order, node selection, why the mutation gate is hook-only | [`REPO.md`](./REPO.md) |
 | why the three authz svcs stay three | parent [`docs/decisions/authorization-service-consolidation.md`](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/decisions/authorization-service-consolidation.md) |
+| GitNexus rules, resources, CLI skills, registry name | [`AGENTS.md`](./AGENTS.md) |
 
 Business queries → `marketplace-dev-authenticated-resource` (4026). Logout →
 `marketplace-dev-authenticated-logout` (4030), all three tiers.
 
 ## ⚠️ NEVER run the mutation gate by hand
 
-`yarn test:mutation` is **hook-only**. It runs when the `pre-push` hook calls it and at no other time —
-not to check a change, not before a commit, not on one file, not to confirm a survivor is fixed. Do not
-invoke `stryker` directly either.
+`yarn test:mutation` is **hook-only** — `pre-push` calls it, nothing else does: not to check a change,
+not before a commit, not on one file, not to confirm a survivor is fixed. Never `npx stryker run`
+either. To reproduce a survivor, apply the mutant by hand in the source and run `yarn test` instead —
+seconds, and it names the tests that should have failed. Why: [`REPO.md`](./REPO.md).
 
-This does not weaken anything: the threshold stays 100, `pre-push` still blocks, and no survivor is ever
-answered by lowering a number. What changes is **who starts the run**. A full pass costs tens of minutes
-and holds the whole machine at 28 workers while it lasts, so an on-demand run is time taken from the
-person waiting for the work.
+## ⚠️ Decided, not re-openable
 
-Go through the package script if a run is ever authorised — never `npx stryker run`, which skips whatever
-the script sets up around it.
-
-A survivor is answered by writing the test it names and letting the next push run the gate. If a mutant
-has to be reproduced first, apply it by hand in the source and run `yarn test` — that is seconds, it
-names the tests that should have failed, and it costs nobody the machine.
-
-## Decided, not re-openable
-
-⚠️ **Most of this service's body lives in `marketplace-common`, deliberately. Do not re-inline the
-helpers, and do not go the other way and merge the three authorization services into one.** The merge is
-a decision the user has already taken, against. The survey behind it, including the two rejected
-alternatives, is the decision doc named above.
-
-## What is still this repo's
-
-- `TIER.shopOwner` — hardcoded at the one `resolveAuthorizationSession` call. Svc that could be told its
-  own tier by a caller asserts nothing.
-- `tokenInfoShopOwner` adds `login.firstLogin`, `login.onboardingStep`, `login.onboardingDone` to the three
-  fields every tier reads. Shop owner has a multi-step onboarding an admin can interrupt; the other two
-  tiers have none.
-- **`makeOnboardingData` omits `onboardingStep` rather than setting it to `undefined`.** The session is
-  written to a Redis hash and `hSet` rejects an undefined value instead of skipping the field, so setting
-  it is a runtime error, not a no-op.
-- `ctx.state.user` = `TAuthorizationSession<IRedisDataShopOwnerCommon>` — the helper's own return type, not
-  a restatement of it. Middleware assigns with no cast; context type and helper cannot drift.
+Most of this service's body lives in `marketplace-common`, deliberately. Do not re-inline the helpers,
+and do not go the other way and merge the three authorization services into one — both directions are a
+decision the user has already taken, against. Survey and rejected alternatives:
+[`docs/decisions/authorization-service-consolidation.md`](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/decisions/authorization-service-consolidation.md).
 
 ## Rules
 
@@ -62,57 +39,10 @@ alternatives, is the decision doc named above.
   missing test. Bypasses (`SKIP_QODANA=1`, `--no-verify`) are gate removals: use only when the user says so.
 - Tabs, not spaces. eslint + prettier both enforce.
 - English only — identifiers, comments, fixtures. No exception.
+- **Run `impact({target, repo})` before editing a symbol and `detect_changes()` before committing**;
+  `repo:` is mandatory and must be a `marketplace*` registry name. Details: [`AGENTS.md`](./AGENTS.md).
 
 ## Gates
 
 commit → secret guard, lint, coverage, Qodana. push → same + semgrep (SAST) + trivy (dependency
 advisories) + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **marketplace-dev-authenticated-authorization**. Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
-
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/marketplace-dev-authenticated-authorization/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/marketplace-dev-authenticated-authorization/clusters` | All functional areas |
-| `gitnexus://repo/marketplace-dev-authenticated-authorization/processes` | All execution flows |
-| `gitnexus://repo/marketplace-dev-authenticated-authorization/process/{name}` | Step-by-step execution trace |
-
-## Cross-Repo Groups
-
-This repository is listed under GitNexus **group(s): marketplace-platform** (see `~/.gitnexus/groups/`). For cross-repo analysis, use MCP tools `impact`, `query`, and `context` with `repo` set to `@<groupName>` or `@<groupName>/<memberPath>` (paths match keys in that group’s `group.yaml`). Use `group_list` / `group_sync` for membership and sync. From the project root: `node .gitnexus/run.cjs group list`, `node .gitnexus/run.cjs group sync <name>`, `node .gitnexus/run.cjs group impact <name> --target <symbol> --repo <group-path>` (the `.gitnexus/run.cjs` path is repo-root-relative).
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
