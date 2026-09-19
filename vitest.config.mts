@@ -53,6 +53,9 @@ export default defineConfig({
 					name: 'unit',
 					include: ['test/*.test.mts'],
 					server: { deps: { inline: inlineDeps } },
+					// vitest.testNames.mts caps how long a test's full name may be — the mutation gate
+					// selects tests by name, and past a size it cannot; see the file.
+					setupFiles: ['./vitest.testNames.mts'],
 					// Set before the sources run `dotenv.config()` — dotenv does not override existing
 					// process.env keys, so these win over whatever the local `.env` holds.
 					env: {
@@ -71,6 +74,9 @@ export default defineConfig({
 					// Drops and re-migrates the throwaway database as the DB owner before any test file
 					// is imported, so every collection carries the real validators and indexes.
 					globalSetup: ['./test/integration/globalSetup.mts'],
+					// vitest.testNames.mts caps how long a test's full name may be — the mutation gate
+					// selects tests by name, and past a size it cannot; see the file.
+					setupFiles: ['./vitest.testNames.mts'],
 					// Redis connection params (hosts/user/password/cluster flag) come from .env; the overrides
 					// below are pinned: per-service keyspace, ephemeral port, and the throwaway database reached
 					// with the least-privilege R/W user.
