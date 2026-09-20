@@ -44,5 +44,5 @@ decision the user has already taken, against. Survey and rejected alternatives:
 
 ## Gates
 
-commit → secret guard, lint, coverage, Qodana. push → same + semgrep (SAST) + trivy (dependency
+commit → secret guard, lint, types, coverage, Qodana. push → same + semgrep (SAST) + trivy (dependency
 advisories) + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
