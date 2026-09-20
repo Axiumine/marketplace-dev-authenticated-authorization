@@ -1,5 +1,7 @@
 # marketplace-dev-authenticated-authorization
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Axiumine/marketplace-dev-authenticated-authorization/badge)](https://scorecard.dev/viewer/?uri=github.com/Axiumine/marketplace-dev-authenticated-authorization)
+
 > [!WARNING]
 > **Work in progress — this software is not tested yet.** It has never run outside a developer
 > workstation: no real deployment, no load test, no security review, no upgrade path. Parts of the
