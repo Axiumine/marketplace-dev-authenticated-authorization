@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 const captureException = vi.fn()
 const captureMessage = vi.fn()
+const flush = vi.fn()
 const RedisConnect = vi.fn()
 const MongoDBConnect = vi.fn()
 const disconnectAllDatabases = vi.fn()
@@ -13,6 +14,10 @@ const setupFieldEncryption = vi.fn()
 const loadKeygrip = vi.fn()
 const watchKeygrip = vi.fn()
 const assertHashFieldTTLSupport = vi.fn()
+// A stub that just calls next(): the wiring under test is which Keygrip THIS FACTORY receives, not
+// what the real handler does with it — that is `authenticatedAuthorizationHandler.test.mts`'s job.
+type TAuthorizationHandlerFactory = (keys: Keygrip) => (ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>
+const authenticatedAuthorizationHandler = vi.fn<TAuthorizationHandlerFactory>(() => (_ctx, next) => next())
 
 // Two 64-byte keys, newest first, exactly as loadKeygrip answers. Written as bytes: nothing here is a
 // real signing key, and the pair has to be distinguishable so the order can be asserted.
@@ -35,7 +40,7 @@ const ROTATED_KEYS = [
 	...KEYS
 ]
 
-vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
+vi.mock('@sentry/node', () => ({ captureException, captureMessage, flush }))
 // redisClient is imported transitively by the handler / resolvers; a bare stub is enough
 // because the unit project never connects — only start()'s failure path is exercised here.
 vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ RedisConnect, redisClient }))
@@ -61,6 +66,7 @@ vi.mock('@axiumine/marketplace-common/others/watchKeygrip', () => ({ watchKeygri
 // connection, and a refusal as fatal as a datasource failure; all three are asserted below.
 vi.mock('@axiumine/marketplace-common/others/assertHashFieldTTLSupport', () => ({ assertHashFieldTTLSupport }))
 vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases }))
+vi.mock('@lib/auth/authenticatedAuthorizationHandler.mjs', () => ({ authenticatedAuthorizationHandler }))
 
 // Imported dynamically inside beforeAll, not with a top-level `await import`: src/index.mts
 // statically imports mutations.mts/queries.mts (for the schema it builds), so a top-level
@@ -434,22 +440,61 @@ describe('process handlers', () => {
 
 	beforeEach(() => {
 		captureException.mockReset()
+		flush.mockReset().mockResolvedValue(true)
 		exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 	afterEach(() => exit.mockRestore())
 
-	it('onUnhandledRejection reports the reason and exits 1', () => {
+	// Neither handler can `await`: Node calls them synchronously and does not wait for a returned
+	// promise, so process.exit() has to be reached from flush()'s own callback instead — pinned with
+	// the exact timeout, or a boot-time crash is reported to the log and lost from Sentry regardless.
+	it('onUnhandledRejection reports the reason, flushes Sentry, then exits 1', async () => {
 		const reason = new Error('boom')
 		onUnhandledRejection(reason)
 		expect(captureException).toHaveBeenCalledWith(reason)
-		expect(exit).toHaveBeenCalledWith(1)
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
 	})
 
-	it('onUncaughtException reports the error and exits 1', () => {
+	// The ordering itself, not just that both eventually happened: process.exit() must wait on the
+	// flush promise settling, or a mutant that drops the `.finally` wiring and exits immediately would
+	// pass the test above unnoticed.
+	it('onUnhandledRejection does not exit until the flush settles', async () => {
+		let resolveFlush: (value: boolean) => void = () => undefined
+		flush.mockReturnValueOnce(new Promise<boolean>((resolve) => (resolveFlush = resolve)))
+
+		onUnhandledRejection(new Error('boom'))
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(exit).not.toHaveBeenCalled()
+
+		resolveFlush(true)
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+	})
+
+	it('onUncaughtException reports the error, flushes Sentry, then exits 1', async () => {
 		const error = new Error('kaboom')
 		onUncaughtException(error)
 		expect(captureException).toHaveBeenCalledWith(error)
-		expect(exit).toHaveBeenCalledWith(1)
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
+	})
+
+	it('onUncaughtException does not exit until the flush settles', async () => {
+		let resolveFlush: (value: boolean) => void = () => undefined
+		flush.mockReturnValueOnce(new Promise<boolean>((resolve) => (resolveFlush = resolve)))
+
+		onUncaughtException(new Error('kaboom'))
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(exit).not.toHaveBeenCalled()
+
+		resolveFlush(true)
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
 	})
 })
 
@@ -471,6 +516,7 @@ const resetStartMocks = () => {
 	watchKeygrip.mockReset().mockResolvedValue(undefined)
 	subscriber.connect.mockReset().mockResolvedValue(undefined)
 	redisClient.duplicate.mockClear()
+	authenticatedAuthorizationHandler.mockClear()
 	// ⚠️ `REDIS_URL` is stubbed on top of the list because it is not in it: the guard requires it only
 	// when `REDIS_IS_CLUSTER` is not `'1'`, and `validEnv()`'s `'0'` is that branch.
 	for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, shaped(k))
@@ -716,6 +762,48 @@ describe('start (success path)', () => {
 		expect(signing().index('session-cookie', new Keygrip([KEYS[0].material], 'sha512').sign('session-cookie'))).toBe(1)
 
 		await server?.apolloServer.stop()
+		info.mockRestore()
+	})
+
+	/*
+	 * ⚠️ B1 regression. `app.keys` rotating is not the fix by itself — the auth middleware used to close
+	 * over the boot-time `keys` local instead of reading it, so signing moved to the new key while
+	 * verification silently kept trusting the old one until a restart. This drives the REGISTERED request
+	 * middleware directly (index 1: after `tdwKoaErrorHandler`, before the body parser) and inspects which
+	 * Keygrip the verifier factory actually received, both before and after a rotation — the exact seam the
+	 * bug lived in, rather than `app.keys` alone, which the test above already shows updates correctly.
+	 */
+	it('hands the verifier the current app.keys on every request, never the boot-time closure', async () => {
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+
+		const server = await start()
+		if (!server) throw new Error('server did not start')
+
+		const { onKeys } = watchKeygrip.mock.calls[0][0] as {
+			onKeys: (record: { version: number; fp: string; keys: typeof KEYS }) => void
+		}
+		const authMiddleware = server.app.middleware[1] as unknown as (
+			ctx: unknown,
+			next: () => Promise<unknown>
+		) => Promise<unknown>
+		const ctx = { app: server.app, state: {} }
+		const next = vi.fn().mockResolvedValue(undefined)
+
+		await authMiddleware(ctx, next)
+		expect(next).toHaveBeenCalledTimes(1)
+		const beforeRotation = authenticatedAuthorizationHandler.mock.calls[0][0]
+		expect(beforeRotation.sign('probe')).toBe(new Keygrip([KEYS[0].material], 'sha512').sign('probe'))
+
+		onKeys({ version: 2, fp: '0b1d9f2c4a77', keys: ROTATED_KEYS })
+
+		await authMiddleware(ctx, next)
+		const afterRotation = authenticatedAuthorizationHandler.mock.calls[1][0]
+		// The verifier on the very next request is handed the key `onKeys` just wrote into `app.keys` —
+		// not the array `createServer` closed over at boot, which would still sign like `beforeRotation`.
+		expect(afterRotation.sign('probe')).toBe(new Keygrip([ROTATED_KEYS[0].material], 'sha512').sign('probe'))
+		expect(afterRotation.sign('probe')).not.toBe(beforeRotation.sign('probe'))
+
+		await server.apolloServer.stop()
 		info.mockRestore()
 	})
 

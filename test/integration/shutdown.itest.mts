@@ -184,16 +184,20 @@ describe('process-level error handlers', () => {
 		exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 
-	it('exits 1 on an unhandled rejection', () => {
+	// Neither handler can `await` — Node calls them synchronously — so process.exit() now runs from
+	// Sentry.flush()'s own callback (B14) instead of straight after captureException(). Against the
+	// real SDK that is a real, if tiny, asynchronous gap: wait for it rather than asserting the instant
+	// the call returns.
+	it('exits 1 on an unhandled rejection', async () => {
 		onUnhandledRejection(new Error('itest unhandled rejection'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 
-	it('exits 1 on an uncaught exception', () => {
+	it('exits 1 on an uncaught exception', async () => {
 		onUncaughtException(new Error('itest uncaught exception'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 })
 
