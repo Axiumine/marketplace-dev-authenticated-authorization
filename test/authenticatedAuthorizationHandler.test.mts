@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hGetAll = vi.fn()
 /*
- * `incr` counts two different things, and which one it counted is the assertion. It is the per-token
- * attempt limiter, which runs on every call, and it is the grace counter, which runs
- * only on a replay inside the window. So the steady-state tests pin the key it was called with rather
- * than that it was never called: the limiter must have counted once, and nothing else may have.
+ * `incr` counts three different things, and which ones it counted is the assertion. It is the per-token
+ * attempt limiter, which runs on every call; it is `resolveAuthorizationSession`'s claim on a session it
+ * found, which runs on every hit, since marketplace-common 4.6.0; and it is the grace counter, which runs
+ * only on a replay inside the window. So the steady-state tests pin the keys it was called with, in
+ * order, rather than that it was never called: the limiter must have counted once, the claim once more
+ * on a hit, and nothing else may have.
  *
- * It counted a third thing once — `dual-read-hits`, the fallback that let a pre-cutover session
+ * It counted a fourth thing once — `dual-read-hits`, the fallback that let a pre-cutover session
  * resolve. The assertions below are unchanged by its removal, which is the point of having written them
  * as an exact call list rather than as a count.
  */
@@ -54,6 +56,12 @@ const OID = '507f1f77bcf86cd799439011'
  * outside this file like every other digest here, so a mutated algorithm cannot agree with itself.
  */
 const RATE_LIMIT_KEY = 'test:rl:refresh:token:0b45c6eb3aa4d66a24e7557de17465a30810fc8ec9a90337d016db0e67d2e3c5'
+/*
+ * The key `claimRefreshRotation` counts under, in marketplace-common's `resolveAuthorizationSession`,
+ * once a session hit is found: the prefix, `claim:`, and the same digest `HASHED_KEY` carries — the
+ * claim and the session it claims are the same token, so they share one digest rather than a second hash.
+ */
+const CLAIM_KEY = 'test:claim:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d684452cefa5'
 /*
  * The lineage every refresh hash carries, and which `assertRefreshLineage` refuses a
  * session without: a family the rotations of one login share, the instant that login happened, and the
@@ -151,9 +159,10 @@ describe('authenticatedAuthorizationHandler', () => {
 		// literal is computed elsewhere so a mutated algorithm cannot make this test agree with itself.
 		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(HASHED_KEY)
 		expect(HASHED_KEY).not.toContain(REFRESH)
-		// The limiter counted this attempt and nothing else did: one `INCR` in total, under the rate-limit
-		// key rather than under any of the counters that hang off a miss.
-		expect(incr.mock.calls).toEqual([[RATE_LIMIT_KEY]])
+		// The limiter counted this attempt, and the claim `resolveAuthorizationSession` takes on the hit
+		// it just read counted once more, in that order — nothing else did, and nothing that hangs off a
+		// miss ran at all.
+		expect(incr.mock.calls).toEqual([[RATE_LIMIT_KEY], [CLAIM_KEY]])
 		// The id string is turned into an ObjectId before the lookup.
 		expect(String(tokenInfoShopOwner.mock.calls[0][0])).toBe(OID)
 		expect(ctx.state.user).toEqual({
@@ -330,10 +339,12 @@ describe('authenticatedAuthorizationHandler', () => {
 
 		await expect(authenticatedAuthorizationHandler(keys)(makeCtx({ cookie: signedCookie() }), next)).resolves.toBe('next')
 
-		expect(incr).toHaveBeenCalledExactlyOnceWith(RATE_LIMIT_KEY)
+		// The pre-lookup limiter's own INCR is the first of the two this request makes — the second is
+		// `resolveAuthorizationSession`'s claim on the session, which cannot run until the session is found.
+		expect(incr.mock.calls[0]).toEqual([RATE_LIMIT_KEY])
 		expect(incr.mock.invocationCallOrder[0]).toBeLessThan(hGetAll.mock.invocationCallOrder[0])
 		// A minute, and the window is armed on the first attempt of it.
-		expect(expire).toHaveBeenCalledExactlyOnceWith(RATE_LIMIT_KEY, 60)
+		expect(expire.mock.calls[0]).toEqual([RATE_LIMIT_KEY, 60])
 		// Neither the token nor the key its session lives under survives into the counter's name.
 		expect(RATE_LIMIT_KEY).not.toContain(REFRESH)
 		expect(RATE_LIMIT_KEY).not.toContain(HASHED_KEY.slice('test:'.length))
