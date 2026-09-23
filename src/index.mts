@@ -177,12 +177,16 @@ export const gracefulShutdown = async (signal: string, apolloServer: ApolloServe
 
 export function onUnhandledRejection(reason: unknown): void {
 	Sentry.captureException(reason)
-	process.exit(1)
+	// A process handler cannot `await`: it runs synchronously and Node does not wait for it. Firing
+	// process.exit() straight after captureException() kills the process before the SDK's own
+	// background flush gets a turn, and the event never reaches Sentry — flush explicitly and exit
+	// from its callback instead.
+	void Sentry.flush(2000).finally(() => process.exit(1))
 }
 
 export function onUncaughtException(error: unknown): void {
 	Sentry.captureException(error)
-	process.exit(1)
+	void Sentry.flush(2000).finally(() => process.exit(1))
 }
 
 /**
@@ -397,7 +401,7 @@ export async function start() {
 		return { app, httpServer, apolloServer, keygripWatch, keygripSubscriber }
 	} catch (error) {
 		console.error('error', error)
-		Sentry.captureException(error) // @fixme does not send the log, verify!
+		Sentry.captureException(error)
 		await disconnectAllDatabases(1)
 	}
 }
@@ -416,7 +420,7 @@ if (process.env.NODE_ENV !== 'test') {
 				process.on('SIGINT', () => gracefulShutdown('SIGINT', srv.apolloServer, srv.httpServer))
 			}
 		})
-		.catch((e: unknown) => {
+		.catch(async (e: unknown) => {
 			/*
 			 * ⚠️ The exit code is the whole point, and it used to be **0**. `checkRequiredEnv()` throws
 			 * outside `start()`'s own try, so a missing variable lands here rather than in the
@@ -429,6 +433,9 @@ if (process.env.NODE_ENV !== 'test') {
 			 */
 			console.error('fatal: the service could not start', e)
 			Sentry.captureException(e)
+			// Same reason as disconnectAllDatabases()'s own exit: nothing survives to flush the SDK's
+			// queue once process.exit() runs, so the event above would never leave the process.
+			await Sentry.flush(2000)
 			process.exit(1)
 		})
 }

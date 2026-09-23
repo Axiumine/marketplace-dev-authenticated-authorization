@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 const captureException = vi.fn()
 const captureMessage = vi.fn()
+const flush = vi.fn()
 const RedisConnect = vi.fn()
 const MongoDBConnect = vi.fn()
 const disconnectAllDatabases = vi.fn()
@@ -39,7 +40,7 @@ const ROTATED_KEYS = [
 	...KEYS
 ]
 
-vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
+vi.mock('@sentry/node', () => ({ captureException, captureMessage, flush }))
 // redisClient is imported transitively by the handler / resolvers; a bare stub is enough
 // because the unit project never connects — only start()'s failure path is exercised here.
 vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ RedisConnect, redisClient }))
@@ -439,22 +440,61 @@ describe('process handlers', () => {
 
 	beforeEach(() => {
 		captureException.mockReset()
+		flush.mockReset().mockResolvedValue(true)
 		exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 	afterEach(() => exit.mockRestore())
 
-	it('onUnhandledRejection reports the reason and exits 1', () => {
+	// Neither handler can `await`: Node calls them synchronously and does not wait for a returned
+	// promise, so process.exit() has to be reached from flush()'s own callback instead — pinned with
+	// the exact timeout, or a boot-time crash is reported to the log and lost from Sentry regardless.
+	it('onUnhandledRejection reports the reason, flushes Sentry, then exits 1', async () => {
 		const reason = new Error('boom')
 		onUnhandledRejection(reason)
 		expect(captureException).toHaveBeenCalledWith(reason)
-		expect(exit).toHaveBeenCalledWith(1)
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
 	})
 
-	it('onUncaughtException reports the error and exits 1', () => {
+	// The ordering itself, not just that both eventually happened: process.exit() must wait on the
+	// flush promise settling, or a mutant that drops the `.finally` wiring and exits immediately would
+	// pass the test above unnoticed.
+	it('onUnhandledRejection does not exit until the flush settles', async () => {
+		let resolveFlush: (value: boolean) => void = () => undefined
+		flush.mockReturnValueOnce(new Promise<boolean>((resolve) => (resolveFlush = resolve)))
+
+		onUnhandledRejection(new Error('boom'))
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(exit).not.toHaveBeenCalled()
+
+		resolveFlush(true)
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+	})
+
+	it('onUncaughtException reports the error, flushes Sentry, then exits 1', async () => {
 		const error = new Error('kaboom')
 		onUncaughtException(error)
 		expect(captureException).toHaveBeenCalledWith(error)
-		expect(exit).toHaveBeenCalledWith(1)
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
+	})
+
+	it('onUncaughtException does not exit until the flush settles', async () => {
+		let resolveFlush: (value: boolean) => void = () => undefined
+		flush.mockReturnValueOnce(new Promise<boolean>((resolve) => (resolveFlush = resolve)))
+
+		onUncaughtException(new Error('kaboom'))
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(exit).not.toHaveBeenCalled()
+
+		resolveFlush(true)
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
 	})
 })
 
