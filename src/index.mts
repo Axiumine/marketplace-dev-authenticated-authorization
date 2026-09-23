@@ -222,7 +222,12 @@ export async function createServer(keygripKeys: IKeygripKeyMaterial[]) {
 	app.keys = keys
 
 	app.use(async (ctx: IContextAuthenticatedAuthorization, next: Next) => {
-		await authenticatedAuthorizationHandler(keys)(ctx, next)
+		// ⚠️ `app.keys`, read fresh on every request — never the `keys` local above. `onKeys` (below)
+		// reassigns `app.keys` in place when the record rotates; a handler closed over `keys` would go on
+		// verifying against the array this process booted with forever, while `ctx.cookies` (which also
+		// reads `app.keys` live) had already moved on to signing with the new one — a process that can
+		// mint a cookie its own verifier then 401s.
+		await authenticatedAuthorizationHandler(app.keys as Keygrip)(ctx, next)
 	})
 
 	app.use(

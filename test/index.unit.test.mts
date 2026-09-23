@@ -13,6 +13,10 @@ const setupFieldEncryption = vi.fn()
 const loadKeygrip = vi.fn()
 const watchKeygrip = vi.fn()
 const assertHashFieldTTLSupport = vi.fn()
+// A stub that just calls next(): the wiring under test is which Keygrip THIS FACTORY receives, not
+// what the real handler does with it — that is `authenticatedAuthorizationHandler.test.mts`'s job.
+type TAuthorizationHandlerFactory = (keys: Keygrip) => (ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>
+const authenticatedAuthorizationHandler = vi.fn<TAuthorizationHandlerFactory>(() => (_ctx, next) => next())
 
 // Two 64-byte keys, newest first, exactly as loadKeygrip answers. Written as bytes: nothing here is a
 // real signing key, and the pair has to be distinguishable so the order can be asserted.
@@ -61,6 +65,7 @@ vi.mock('@axiumine/marketplace-common/others/watchKeygrip', () => ({ watchKeygri
 // connection, and a refusal as fatal as a datasource failure; all three are asserted below.
 vi.mock('@axiumine/marketplace-common/others/assertHashFieldTTLSupport', () => ({ assertHashFieldTTLSupport }))
 vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases }))
+vi.mock('@lib/auth/authenticatedAuthorizationHandler.mjs', () => ({ authenticatedAuthorizationHandler }))
 
 // Imported dynamically inside beforeAll, not with a top-level `await import`: src/index.mts
 // statically imports mutations.mts/queries.mts (for the schema it builds), so a top-level
@@ -471,6 +476,7 @@ const resetStartMocks = () => {
 	watchKeygrip.mockReset().mockResolvedValue(undefined)
 	subscriber.connect.mockReset().mockResolvedValue(undefined)
 	redisClient.duplicate.mockClear()
+	authenticatedAuthorizationHandler.mockClear()
 	// ⚠️ `REDIS_URL` is stubbed on top of the list because it is not in it: the guard requires it only
 	// when `REDIS_IS_CLUSTER` is not `'1'`, and `validEnv()`'s `'0'` is that branch.
 	for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, shaped(k))
@@ -716,6 +722,48 @@ describe('start (success path)', () => {
 		expect(signing().index('session-cookie', new Keygrip([KEYS[0].material], 'sha512').sign('session-cookie'))).toBe(1)
 
 		await server?.apolloServer.stop()
+		info.mockRestore()
+	})
+
+	/*
+	 * ⚠️ B1 regression. `app.keys` rotating is not the fix by itself — the auth middleware used to close
+	 * over the boot-time `keys` local instead of reading it, so signing moved to the new key while
+	 * verification silently kept trusting the old one until a restart. This drives the REGISTERED request
+	 * middleware directly (index 1: after `tdwKoaErrorHandler`, before the body parser) and inspects which
+	 * Keygrip the verifier factory actually received, both before and after a rotation — the exact seam the
+	 * bug lived in, rather than `app.keys` alone, which the test above already shows updates correctly.
+	 */
+	it('hands the verifier the current app.keys on every request, never the boot-time closure', async () => {
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+
+		const server = await start()
+		if (!server) throw new Error('server did not start')
+
+		const { onKeys } = watchKeygrip.mock.calls[0][0] as {
+			onKeys: (record: { version: number; fp: string; keys: typeof KEYS }) => void
+		}
+		const authMiddleware = server.app.middleware[1] as unknown as (
+			ctx: unknown,
+			next: () => Promise<unknown>
+		) => Promise<unknown>
+		const ctx = { app: server.app, state: {} }
+		const next = vi.fn().mockResolvedValue(undefined)
+
+		await authMiddleware(ctx, next)
+		expect(next).toHaveBeenCalledTimes(1)
+		const beforeRotation = authenticatedAuthorizationHandler.mock.calls[0][0]
+		expect(beforeRotation.sign('probe')).toBe(new Keygrip([KEYS[0].material], 'sha512').sign('probe'))
+
+		onKeys({ version: 2, fp: '0b1d9f2c4a77', keys: ROTATED_KEYS })
+
+		await authMiddleware(ctx, next)
+		const afterRotation = authenticatedAuthorizationHandler.mock.calls[1][0]
+		// The verifier on the very next request is handed the key `onKeys` just wrote into `app.keys` —
+		// not the array `createServer` closed over at boot, which would still sign like `beforeRotation`.
+		expect(afterRotation.sign('probe')).toBe(new Keygrip([ROTATED_KEYS[0].material], 'sha512').sign('probe'))
+		expect(afterRotation.sign('probe')).not.toBe(beforeRotation.sign('probe'))
+
+		await server.apolloServer.stop()
 		info.mockRestore()
 	})
 
