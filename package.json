@@ -48,7 +48,7 @@
     "koa": "^3.2.1",
     "koa-bodyparser": "^4.4.1",
     "mongodb-client-encryption": "^7.2.1",
-    "mongoose": "^9.9.1",
+    "mongoose": "^9.10.2",
     "redis": "^6.2.0",
     "reflect-metadata": "^0.2.2",
     "uuid": "^14.0.1"
