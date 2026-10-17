@@ -28,13 +28,13 @@ import { Types } from 'mongoose'
  * @param _id
  */
 export async function tokenInfoShopOwner(_id: Types.ObjectId): Promise<IShopOwnerModel> {
-	const shopOwner = await findAccountForSession<IShopOwnerModel>(
-		ShopOwner,
-		_id,
-		'_id login.email login.firstLogin login.onboardingStep login.onboardingDone deleted disabled waitApprov'
-	)
+  const shopOwner = await findAccountForSession<IShopOwnerModel>(
+    ShopOwner,
+    _id,
+    '_id login.email login.firstLogin login.onboardingStep login.onboardingDone deleted disabled waitApprov'
+  )
 
-	checkShopOwnerApproval(shopOwner)
+  checkShopOwnerApproval(shopOwner)
 
-	return shopOwner
+  return shopOwner
 }

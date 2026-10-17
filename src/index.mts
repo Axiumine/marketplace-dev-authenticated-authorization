@@ -41,30 +41,30 @@ export const SERVICE_NAME = 'marketplace-dev-authenticated-authorization'
 // boot fail *silently* — checkRequiredEnv() runs outside start()'s try, so the throw reached only the
 // top-level `.catch`, which reports to the very Sentry client the missing DSN had just disabled.
 export const REQUIRED_ENV_VARS = [
-	'PORT',
-	// ADR-034. The signing keys themselves are no longer here: they live in one Redis record shared by
-	// the five services that sign cookies, and this is the key that unwraps it. A service whose KEK
-	// does not open the record refuses to boot rather than signing cookies its siblings cannot verify.
-	'KEYGRIP_KEK',
-	'REDIS_IS_CLUSTER',
-	'REDIS_DB1_HOST',
-	'REDIS_DB2_HOST',
-	'REDIS_DB3_HOST',
-	'REDIS_DB1_PORT',
-	'REDIS_DB2_PORT',
-	'REDIS_DB3_PORT',
-	'REDIS_USERNAME',
-	'REDIS_PASSWORD',
-	'REDIS_KEY',
-	// start() calls MongoDBConnect() — a missing URI used to surface as a driver error from inside the
-	// try, reported to Sentry and exited 1, instead of the one-line guard message before anything
-	// connects.
-	'MONGODB_URI',
-	// ADR-029. Both are read by setupFieldEncryption() below, and both belong in this list rather
-	// than being left to fail later: a service that boots without them cannot read a single personal
-	// field, and every query that touches one throws on its first use instead of at startup.
-	'CSFLE_MASTER_KEY_PATH',
-	'CSFLE_KEY_VAULT_NAMESPACE'
+  'PORT',
+  // ADR-034. The signing keys themselves are no longer here: they live in one Redis record shared by
+  // the five services that sign cookies, and this is the key that unwraps it. A service whose KEK
+  // does not open the record refuses to boot rather than signing cookies its siblings cannot verify.
+  'KEYGRIP_KEK',
+  'REDIS_IS_CLUSTER',
+  'REDIS_DB1_HOST',
+  'REDIS_DB2_HOST',
+  'REDIS_DB3_HOST',
+  'REDIS_DB1_PORT',
+  'REDIS_DB2_PORT',
+  'REDIS_DB3_PORT',
+  'REDIS_USERNAME',
+  'REDIS_PASSWORD',
+  'REDIS_KEY',
+  // start() calls MongoDBConnect() — a missing URI used to surface as a driver error from inside the
+  // try, reported to Sentry and exited 1, instead of the one-line guard message before anything
+  // connects.
+  'MONGODB_URI',
+  // ADR-029. Both are read by setupFieldEncryption() below, and both belong in this list rather
+  // than being left to fail later: a service that boots without them cannot read a single personal
+  // field, and every query that touches one throws on its first use instead of at startup.
+  'CSFLE_MASTER_KEY_PATH',
+  'CSFLE_KEY_VAULT_NAMESPACE'
 ]
 
 /**
@@ -85,58 +85,58 @@ export const REQUIRED_ENV_VARS = [
  * the fleet was pointed at: that residual is the open half of `RISK_REGISTER` R04.
  */
 export const ENV_SHAPES: Readonly<Record<string, EnvShape>> = {
-	PORT: 'port',
-	REDIS_IS_CLUSTER: 'flag01',
-	/*
-	 * ⚠️ Shaped here and required nowhere. Its presence rule is the conditional at the foot of
-	 * `checkRequiredEnv`, because the cluster branch never reads it and the committed `env` template ships
-	 * it empty — a shape pass that also demanded presence would refuse the very machines this workspace
-	 * ships configured. `assertEnvShape` skips an absent or empty value for exactly this case.
-	 */
-	REDIS_URL: 'redisUrl',
-	REDIS_DB1_HOST: 'hostname',
-	REDIS_DB2_HOST: 'hostname',
-	REDIS_DB3_HOST: 'hostname',
-	REDIS_DB1_PORT: 'port',
-	REDIS_DB2_PORT: 'port',
-	REDIS_DB3_PORT: 'port',
-	REDIS_KEY: 'keyPrefix',
-	MONGODB_URI: 'mongoUri',
-	CSFLE_MASTER_KEY_PATH: 'absolutePath',
-	CSFLE_KEY_VAULT_NAMESPACE: 'namespace'
+  PORT: 'port',
+  REDIS_IS_CLUSTER: 'flag01',
+  /*
+   * ⚠️ Shaped here and required nowhere. Its presence rule is the conditional at the foot of
+   * `checkRequiredEnv`, because the cluster branch never reads it and the committed `env` template ships
+   * it empty — a shape pass that also demanded presence would refuse the very machines this workspace
+   * ships configured. `assertEnvShape` skips an absent or empty value for exactly this case.
+   */
+  REDIS_URL: 'redisUrl',
+  REDIS_DB1_HOST: 'hostname',
+  REDIS_DB2_HOST: 'hostname',
+  REDIS_DB3_HOST: 'hostname',
+  REDIS_DB1_PORT: 'port',
+  REDIS_DB2_PORT: 'port',
+  REDIS_DB3_PORT: 'port',
+  REDIS_KEY: 'keyPrefix',
+  MONGODB_URI: 'mongoUri',
+  CSFLE_MASTER_KEY_PATH: 'absolutePath',
+  CSFLE_KEY_VAULT_NAMESPACE: 'namespace'
 }
 
 /**
  * Fail fast if any required environment variable is missing.
  */
 export function checkRequiredEnv(env: NodeJS.ProcessEnv = process.env): void {
-	for (const envVar of REQUIRED_ENV_VARS) {
-		if (!env[envVar]) {
-			const message = `Missing required environment variable: ${envVar}`
-			throw new Error(message)
-		}
-	}
+  for (const envVar of REQUIRED_ENV_VARS) {
+    if (!env[envVar]) {
+      const message = `Missing required environment variable: ${envVar}`
+      throw new Error(message)
+    }
+  }
 
-	/*
-	 * ⚠️ **`REDIS_URL` is required on the single-node branch and on that branch only**, which is why it is checked
-	 * here instead of being listed above. `REDIS_IS_CLUSTER=1` builds the cluster client out of the three
-	 * `REDIS_DB*` pairs and never reads it — the committed `env` template ships it empty for exactly that reason,
-	 * so a flat entry in the list would refuse the boot of a machine that is configured correctly.
-	 *
-	 * Any other value takes the `createClient({ url: resolveRedisUrl(REDIS_URL) })` branch, where node-redis
-	 * answers an unset url with its own default of `redis://localhost:6379`. Empty is not an error there: the
-	 * service connects to whatever happens to listen on this machine, writes every session into it and reports
-	 * itself healthy, which is a wrong-but-populated environment nothing downstream can tell from a right one
-	 * (`RISK_REGISTER` R04). `SETUP.md` puts a fresh machine on precisely that branch.
-	 */
-	if (env.REDIS_IS_CLUSTER !== '1' && !env.REDIS_URL) throw new Error('Missing required environment variable: REDIS_URL')
+  /*
+   * ⚠️ **`REDIS_URL` is required on the single-node branch and on that branch only**, which is why it is checked
+   * here instead of being listed above. `REDIS_IS_CLUSTER=1` builds the cluster client out of the three
+   * `REDIS_DB*` pairs and never reads it — the committed `env` template ships it empty for exactly that reason,
+   * so a flat entry in the list would refuse the boot of a machine that is configured correctly.
+   *
+   * Any other value takes the `createClient({ url: resolveRedisUrl(REDIS_URL) })` branch, where node-redis
+   * answers an unset url with its own default of `redis://localhost:6379`. Empty is not an error there: the
+   * service connects to whatever happens to listen on this machine, writes every session into it and reports
+   * itself healthy, which is a wrong-but-populated environment nothing downstream can tell from a right one
+   * (`RISK_REGISTER` R04). `SETUP.md` puts a fresh machine on precisely that branch.
+   */
+  if (env.REDIS_IS_CLUSTER !== '1' && !env.REDIS_URL) throw new Error('Missing required environment variable: REDIS_URL')
 
-	/*
-	 * Shape last, and only once every name that must be present is. A value that is absent is a
-	 * different fault from a value that is the wrong kind of thing, and reporting the second while the
-	 * first is outstanding sends an admin to fix a variable they have not written yet.
-	 */
-	assertEnvShape(ENV_SHAPES, env)
+  /*
+   * Shape last, and only once every name that must be present is. A value that is absent is a
+   * different fault from a value that is the wrong kind of thing, and reporting the second while the
+   * first is outstanding sends an admin to fix a variable they have not written yet.
+   */
+  assertEnvShape(ENV_SHAPES, env)
 }
 
 /**
@@ -144,7 +144,7 @@ export function checkRequiredEnv(env: NodeJS.ProcessEnv = process.env): void {
  * Everywhere else the rules are empty so the playground/tooling stays usable.
  */
 export function buildValidationRules(env: NodeJS.ProcessEnv = process.env): ValidationRule[] {
-	return env.NODE_ENV === 'production' ? [NoSchemaIntrospectionCustomRule, depthLimit(10)] : []
+  return env.NODE_ENV === 'production' ? [NoSchemaIntrospectionCustomRule, depthLimit(10)] : []
 }
 
 /**
@@ -152,41 +152,41 @@ export function buildValidationRules(env: NodeJS.ProcessEnv = process.env): Vali
  * throw, which is why the old try/catch around it was removed as dead code.
  */
 export function healthResponse(): { status: string; timestamp: string } {
-	return { status: 'OK', timestamp: new Date().toISOString() }
+  return { status: 'OK', timestamp: new Date().toISOString() }
 }
 
 /**
  * Log the listening banner; in production also mirror it to Sentry as an info event.
  */
 export function logListening(env: NodeJS.ProcessEnv = process.env): void {
-	// The `*` is deliberate and accurate: the server binds every interface (see start()), so
-	// there is no single address to name. No HOSTNAME reference — that env var was removed.
-	const message = `Serving http://*:${env.PORT}${ENDPOINT} for ${env.NODE_ENV}.`
-	if (env.NODE_ENV === 'production') Sentry.captureMessage(message, 'info')
-	console.info(message)
+  // The `*` is deliberate and accurate: the server binds every interface (see start()), so
+  // there is no single address to name. No HOSTNAME reference — that env var was removed.
+  const message = `Serving http://*:${env.PORT}${ENDPOINT} for ${env.NODE_ENV}.`
+  if (env.NODE_ENV === 'production') Sentry.captureMessage(message, 'info')
+  console.info(message)
 }
 
 /**
  * Drain Apollo, close the HTTP server, then disconnect the datasources and exit.
  */
 export const gracefulShutdown = async (signal: string, apolloServer: ApolloServer, httpServer: http.Server) => {
-	Sentry.captureMessage(`${signal} received, shutting down gracefully...`)
-	await apolloServer.stop()
-	httpServer.close(() => disconnectAllDatabases(0))
+  Sentry.captureMessage(`${signal} received, shutting down gracefully...`)
+  await apolloServer.stop()
+  httpServer.close(() => disconnectAllDatabases(0))
 }
 
 export function onUnhandledRejection(reason: unknown): void {
-	Sentry.captureException(reason)
-	// A process handler cannot `await`: it runs synchronously and Node does not wait for it. Firing
-	// process.exit() straight after captureException() kills the process before the SDK's own
-	// background flush gets a turn, and the event never reaches Sentry — flush explicitly and exit
-	// from its callback instead.
-	void Sentry.flush(2000).finally(() => process.exit(1))
+  Sentry.captureException(reason)
+  // A process handler cannot `await`: it runs synchronously and Node does not wait for it. Firing
+  // process.exit() straight after captureException() kills the process before the SDK's own
+  // background flush gets a turn, and the event never reaches Sentry — flush explicitly and exit
+  // from its callback instead.
+  void Sentry.flush(2000).finally(() => process.exit(1))
 }
 
 export function onUncaughtException(error: unknown): void {
-	Sentry.captureException(error)
-	void Sentry.flush(2000).finally(() => process.exit(1))
+  Sentry.captureException(error)
+  void Sentry.flush(2000).finally(() => process.exit(1))
 }
 
 /**
@@ -198,93 +198,93 @@ export function onUncaughtException(error: unknown): void {
  * live datasource, and could not be handed a second key set when a rotation lands.
  */
 export async function createServer(keygripKeys: IKeygripKeyMaterial[]) {
-	/****************
-	 * KOA
-	 */
-	const app = new Koa()
-	// app.use(logger()) // useful only for log time to console
-	app.use(tdwKoaErrorHandler)
+  /****************
+   * KOA
+   */
+  const app = new Koa()
+  // app.use(logger()) // useful only for log time to console
+  app.use(tdwKoaErrorHandler)
 
-	/*****
-	 * sign cookie
-	 *
-	 * An SHA-512 key is used for HMAC operations. The minimum length for an SHA-512 HMAC key is 64 bytes.
-	 * A key longer than 64 bytes does not significantly increase the function strength unless the
-	 * randomness of the key is considered weak. A key longer than 128 bytes will be hashed before it is used.
-	 *
-	 * 64-byte base64: minted by the seed script in marketplace-db-setup, never by hand and never here.
-	 *
-	 * ⚠️ **Order is load-bearing.** `Keygrip` signs with index 0 and verifies against every entry, so the
-	 * newest key must come first — which is how `loadKeygrip` answers — and the older ones are what keep
-	 * already-issued cookies verifying across a rotation. The `cookies` package re-signs a cookie whose
-	 * match came from a later index, so sessions migrate to the new key on their own.
-	 */
-	const keys = new Keygrip(
-		keygripKeys.map((key) => key.material),
-		'sha512'
-	)
-	app.keys = keys
+  /*****
+   * sign cookie
+   *
+   * An SHA-512 key is used for HMAC operations. The minimum length for an SHA-512 HMAC key is 64 bytes.
+   * A key longer than 64 bytes does not significantly increase the function strength unless the
+   * randomness of the key is considered weak. A key longer than 128 bytes will be hashed before it is used.
+   *
+   * 64-byte base64: minted by the seed script in marketplace-db-setup, never by hand and never here.
+   *
+   * ⚠️ **Order is load-bearing.** `Keygrip` signs with index 0 and verifies against every entry, so the
+   * newest key must come first — which is how `loadKeygrip` answers — and the older ones are what keep
+   * already-issued cookies verifying across a rotation. The `cookies` package re-signs a cookie whose
+   * match came from a later index, so sessions migrate to the new key on their own.
+   */
+  const keys = new Keygrip(
+    keygripKeys.map((key) => key.material),
+    'sha512'
+  )
+  app.keys = keys
 
-	app.use(async (ctx: IContextAuthenticatedAuthorization, next: Next) => {
-		// ⚠️ `app.keys`, read fresh on every request — never the `keys` local above. `onKeys` (below)
-		// reassigns `app.keys` in place when the record rotates; a handler closed over `keys` would go on
-		// verifying against the array this process booted with forever, while `ctx.cookies` (which also
-		// reads `app.keys` live) had already moved on to signing with the new one — a process that can
-		// mint a cookie its own verifier then 401s.
-		await authenticatedAuthorizationHandler(app.keys as Keygrip)(ctx, next)
-	})
+  app.use(async (ctx: IContextAuthenticatedAuthorization, next: Next) => {
+    // ⚠️ `app.keys`, read fresh on every request — never the `keys` local above. `onKeys` (below)
+    // reassigns `app.keys` in place when the record rotates; a handler closed over `keys` would go on
+    // verifying against the array this process booted with forever, while `ctx.cookies` (which also
+    // reads `app.keys` live) had already moved on to signing with the new one — a process that can
+    // mint a cookie its own verifier then 401s.
+    await authenticatedAuthorizationHandler(app.keys as Keygrip)(ctx, next)
+  })
 
-	app.use(
-		bodyParserKoa({
-			enableTypes: ['json', 'form', 'text'],
-			// Exclude multipart requests that graphqlUploadKoa will handle
-			extendTypes: {
-				json: ['application/json']
-			}
-		})
-	) // also needed by Apollo
+  app.use(
+    bodyParserKoa({
+      enableTypes: ['json', 'form', 'text'],
+      // Exclude multipart requests that graphqlUploadKoa will handle
+      extendTypes: {
+        json: ['application/json']
+      }
+    })
+  ) // also needed by Apollo
 
-	/****************
-	 * KOA ENDPOINT
-	 */
-	app.use(async (ctx: Context, next: Next) => {
-		if (ctx.path === ENDPOINT) {
-			// v3 of @as-integrations/koa types this overload; v2 did not, and needed a suppression.
-			const middleware = apolloServerKoa(apolloServer, {
-				async context() {
-					return ctx
-				}
-			})
-			return middleware(ctx, next)
-		} else if (ctx.path === '/health') {
-			ctx.body = healthResponse()
-			ctx.status = 200
-			return
-		} else {
-			await next()
-		}
-	})
+  /****************
+   * KOA ENDPOINT
+   */
+  app.use(async (ctx: Context, next: Next) => {
+    if (ctx.path === ENDPOINT) {
+      // v3 of @as-integrations/koa types this overload; v2 did not, and needed a suppression.
+      const middleware = apolloServerKoa(apolloServer, {
+        async context() {
+          return ctx
+        }
+      })
+      return middleware(ctx, next)
+    } else if (ctx.path === '/health') {
+      ctx.body = healthResponse()
+      ctx.status = 200
+      return
+    } else {
+      await next()
+    }
+  })
 
-	/****************
-	 * APOLLO
-	 */
-	const httpServer = http.createServer(app.callback())
+  /****************
+   * APOLLO
+   */
+  const httpServer = http.createServer(app.callback())
 
-	const graphQLSchema = new GraphQLSchema({
-		query: QueriesPublic,
-		mutation: MutationsPublic
-	})
+  const graphQLSchema = new GraphQLSchema({
+    query: QueriesPublic,
+    mutation: MutationsPublic
+  })
 
-	const apolloServer = new ApolloServer({
-		schema: graphQLSchema,
-		plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
-		validationRules: buildValidationRules(),
-		csrfPrevention: true
-	})
+  const apolloServer = new ApolloServer({
+    schema: graphQLSchema,
+    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
+    validationRules: buildValidationRules(),
+    csrfPrevention: true
+  })
 
-	await apolloServer.start()
+  await apolloServer.start()
 
-	return { app, httpServer, apolloServer, keys }
+  return { app, httpServer, apolloServer, keys }
 }
 
 /**
@@ -292,151 +292,151 @@ export async function createServer(keygripKeys: IKeygripKeyMaterial[]) {
  * Returns the handles on success; on failure disconnects and exits.
  */
 export async function start() {
-	checkRequiredEnv()
+  checkRequiredEnv()
 
-	try {
-		/****************
-		 * DB
-		 */
-		await Promise.all([RedisConnect(), MongoDBConnect()])
+  try {
+    /****************
+     * DB
+     */
+    await Promise.all([RedisConnect(), MongoDBConnect()])
 
-		/****************
-		 * Hash-field TTLs
-		 *
-		 * The first thing asked of the connection, because every rotation this service serves files the
-		 * successor session under its account and arms an `HEXPIRE` on the new field — and Redis does not
-		 * refuse an unknown command at startup, it refuses it at first use. Without this the service boots
-		 * on a 7.2 server, verifies every token it is handed, and dies inside the first refresh of the day
-		 * with the cause three layers below the symptom: a client logged out mid-session because the server
-		 * is one minor version too old. The floor is 7.4.0, written down in `marketplace-docker-DBs/README.md` §Redis.
-		 */
-		await assertHashFieldTTLSupport(redisClient)
+    /****************
+     * Hash-field TTLs
+     *
+     * The first thing asked of the connection, because every rotation this service serves files the
+     * successor session under its account and arms an `HEXPIRE` on the new field — and Redis does not
+     * refuse an unknown command at startup, it refuses it at first use. Without this the service boots
+     * on a 7.2 server, verifies every token it is handed, and dies inside the first refresh of the day
+     * with the cause three layers below the symptom: a client logged out mid-session because the server
+     * is one minor version too old. The floor is 7.4.0, written down in `marketplace-docker-DBs/README.md` §Redis.
+     */
+    await assertHashFieldTTLSupport(redisClient)
 
-		/****************
-		 * Cookie signing keys (ADR-034)
-		 *
-		 * Immediately after the Redis connect and before anything can sign: the keys are one record shared
-		 * by every service that issues or reads a session cookie, and a service that cannot unwrap it must
-		 * not start. Five copies of the key in five environment files, with nothing comparing them, is the
-		 * arrangement this replaces — its failure mode was users being logged out by whichever service the
-		 * edge happened to pick.
-		 */
-		const { keys: keygripKeys, version, fp } = await loadKeygrip(redisClient, SERVICE_NAME)
+    /****************
+     * Cookie signing keys (ADR-034)
+     *
+     * Immediately after the Redis connect and before anything can sign: the keys are one record shared
+     * by every service that issues or reads a session cookie, and a service that cannot unwrap it must
+     * not start. Five copies of the key in five environment files, with nothing comparing them, is the
+     * arrangement this replaces — its failure mode was users being logged out by whichever service the
+     * edge happened to pick.
+     */
+    const { keys: keygripKeys, version, fp } = await loadKeygrip(redisClient, SERVICE_NAME)
 
-		/****************
-		 * Field encryption (ADR-029)
-		 *
-		 * After MongoDBConnect() and before anything can query: it reuses the connection mongoose has
-		 * just opened, and the models refuse to read or write a personal field until it has run. It
-		 * throws rather than warning if the master key is missing — a service that started without it
-		 * would write plaintext into collections whose other documents are ciphertext, and nothing
-		 * would show that up until someone read the data back.
-		 */
-		await setupFieldEncryption()
+    /****************
+     * Field encryption (ADR-029)
+     *
+     * After MongoDBConnect() and before anything can query: it reuses the connection mongoose has
+     * just opened, and the models refuse to read or write a personal field until it has run. It
+     * throws rather than warning if the master key is missing — a service that started without it
+     * would write plaintext into collections whose other documents are ciphertext, and nothing
+     * would show that up until someone read the data back.
+     */
+    await setupFieldEncryption()
 
-		const { app, httpServer, apolloServer } = await createServer(keygripKeys)
+    const { app, httpServer, apolloServer } = await createServer(keygripKeys)
 
-		/****************
-		 * Live key adoption (ADR-034)
-		 *
-		 * The half that makes rotation an admin action rather than a deploy: when the record moves, this
-		 * process rebuilds its `Keygrip` in place. Without it the new key would reach this service only at
-		 * the next restart, and the platform would spend that window signing with two different index-0
-		 * keys — the failure the record was introduced to end.
-		 *
-		 * ⚠️ **A second connection, and it must be one.** node-redis refuses ordinary commands on a client
-		 * in subscriber mode, so subscribing on the shared client would break every session read this
-		 * service makes. `duplicate()` inherits the cluster's options and credentials; only `connect()` is
-		 * ours to call.
-		 *
-		 * ⚠️ **Before `listen()`, deliberately.** Nothing may be signed with keys this process is not yet
-		 * watching: a rotation landing between the build and the subscribe would be missed by both paths —
-		 * the message arrives at nobody and the poll starts from a version that is already stale.
-		 *
-		 * `app.keys` is reassigned rather than the `Keygrip` being mutated: the instance is private to
-		 * `cookies`, which reads `app.keys` per request, so a swapped reference is picked up by the next
-		 * request and every in-flight one finishes against the array it started with.
-		 */
-		const keygripSubscriber = redisClient.duplicate()
-		await keygripSubscriber.connect()
+    /****************
+     * Live key adoption (ADR-034)
+     *
+     * The half that makes rotation an admin action rather than a deploy: when the record moves, this
+     * process rebuilds its `Keygrip` in place. Without it the new key would reach this service only at
+     * the next restart, and the platform would spend that window signing with two different index-0
+     * keys — the failure the record was introduced to end.
+     *
+     * ⚠️ **A second connection, and it must be one.** node-redis refuses ordinary commands on a client
+     * in subscriber mode, so subscribing on the shared client would break every session read this
+     * service makes. `duplicate()` inherits the cluster's options and credentials; only `connect()` is
+     * ours to call.
+     *
+     * ⚠️ **Before `listen()`, deliberately.** Nothing may be signed with keys this process is not yet
+     * watching: a rotation landing between the build and the subscribe would be missed by both paths —
+     * the message arrives at nobody and the poll starts from a version that is already stale.
+     *
+     * `app.keys` is reassigned rather than the `Keygrip` being mutated: the instance is private to
+     * `cookies`, which reads `app.keys` per request, so a swapped reference is picked up by the next
+     * request and every in-flight one finishes against the array it started with.
+     */
+    const keygripSubscriber = redisClient.duplicate()
+    await keygripSubscriber.connect()
 
-		const keygripWatch = await watchKeygrip({
-			store: redisClient,
-			subscriber: keygripSubscriber,
-			serviceName: SERVICE_NAME,
-			version,
-			fp,
-			onKeys: (record) => {
-				app.keys = new Keygrip(
-					record.keys.map((key) => key.material),
-					'sha512'
-				)
-			},
-			onError: (error) => Sentry.captureException(error)
-		})
+    const keygripWatch = await watchKeygrip({
+      store: redisClient,
+      subscriber: keygripSubscriber,
+      serviceName: SERVICE_NAME,
+      version,
+      fp,
+      onKeys: (record) => {
+        app.keys = new Keygrip(
+          record.keys.map((key) => key.material),
+          'sha512'
+        )
+      },
+      onError: (error) => Sentry.captureException(error)
+    })
 
-		/****************
-		 * START SERVER
-		 */
-		await new Promise<void>((resolve) => {
-			httpServer.listen(
-				{
-					port: process.env.PORT
-					// No host: bind every interface on purpose. This used to pass a hostname key, which is not
-					// a net.Server.listen option — Node ignored it and bound the unspecified address anyway, so
-					// HOSTNAME never had any effect. Binding wide is the intent; the dead key only hid it.
-				},
-				() => {
-					logListening()
-					resolve()
-				}
-			)
-		})
+    /****************
+     * START SERVER
+     */
+    await new Promise<void>((resolve) => {
+      httpServer.listen(
+        {
+          port: process.env.PORT
+          // No host: bind every interface on purpose. This used to pass a hostname key, which is not
+          // a net.Server.listen option — Node ignored it and bound the unspecified address anyway, so
+          // HOSTNAME never had any effect. Binding wide is the intent; the dead key only hid it.
+        },
+        () => {
+          logListening()
+          resolve()
+        }
+      )
+    })
 
-		// `app` travels out with the handles because it is where a rotation lands: everything that reads
-		// the effect of `onKeys` — a test, or a future health probe reporting which fingerprint this
-		// process is signing with — reads `app.keys`. The watch and its connection are returned for the
-		// tests that have to shut a booted service down cleanly; the process itself never stops watching,
-		// and `disconnectAllDatabases` ends with `process.exit`, which takes the subscriber with it.
-		return { app, httpServer, apolloServer, keygripWatch, keygripSubscriber }
-	} catch (error) {
-		console.error('error', error)
-		Sentry.captureException(error)
-		await disconnectAllDatabases(1)
-	}
+    // `app` travels out with the handles because it is where a rotation lands: everything that reads
+    // the effect of `onKeys` — a test, or a future health probe reporting which fingerprint this
+    // process is signing with — reads `app.keys`. The watch and its connection are returned for the
+    // tests that have to shut a booted service down cleanly; the process itself never stops watching,
+    // and `disconnectAllDatabases` ends with `process.exit`, which takes the subscriber with it.
+    return { app, httpServer, apolloServer, keygripWatch, keygripSubscriber }
+  } catch (error) {
+    console.error('error', error)
+    Sentry.captureException(error)
+    await disconnectAllDatabases(1)
+  }
 }
 
 /* v8 ignore start -- entrypoint wiring: executes only as the real process, never under test (NODE_ENV=test) */
 if (process.env.NODE_ENV !== 'test') {
-	// Handle unhandled promise rejections / uncaught exceptions
-	process.on('unhandledRejection', onUnhandledRejection)
-	process.on('uncaughtException', onUncaughtException)
+  // Handle unhandled promise rejections / uncaught exceptions
+  process.on('unhandledRejection', onUnhandledRejection)
+  process.on('uncaughtException', onUncaughtException)
 
-	start()
-		.then((srv) => {
-			if (srv) {
-				// Handle termination signals once the server is up
-				process.on('SIGTERM', () => gracefulShutdown('SIGTERM', srv.apolloServer, srv.httpServer))
-				process.on('SIGINT', () => gracefulShutdown('SIGINT', srv.apolloServer, srv.httpServer))
-			}
-		})
-		.catch(async (e: unknown) => {
-			/*
-			 * ⚠️ The exit code is the whole point, and it used to be **0**. `checkRequiredEnv()` throws
-			 * outside `start()`'s own try, so a missing variable lands here rather than in the
-			 * disconnect-and-exit inside it — and this handler ended with a Sentry call and nothing else.
-			 * Node then ran out of work and left with a success code: a service that never bound its port
-			 * reported a clean shutdown to Docker, to systemd and to any restart policy reading `$?`, so a
-			 * boot that failed was indistinguishable from one that was asked to stop. Sentry cannot stand in
-			 * for the code either — with no DSN configured the SDK discards the event, which is the state
-			 * this platform boots in. Say it where the container's own logs are, then leave with 1.
-			 */
-			console.error('fatal: the service could not start', e)
-			Sentry.captureException(e)
-			// Same reason as disconnectAllDatabases()'s own exit: nothing survives to flush the SDK's
-			// queue once process.exit() runs, so the event above would never leave the process.
-			await Sentry.flush(2000)
-			process.exit(1)
-		})
+  start()
+    .then((srv) => {
+      if (srv) {
+        // Handle termination signals once the server is up
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM', srv.apolloServer, srv.httpServer))
+        process.on('SIGINT', () => gracefulShutdown('SIGINT', srv.apolloServer, srv.httpServer))
+      }
+    })
+    .catch(async (e: unknown) => {
+      /*
+       * ⚠️ The exit code is the whole point, and it used to be **0**. `checkRequiredEnv()` throws
+       * outside `start()`'s own try, so a missing variable lands here rather than in the
+       * disconnect-and-exit inside it — and this handler ended with a Sentry call and nothing else.
+       * Node then ran out of work and left with a success code: a service that never bound its port
+       * reported a clean shutdown to Docker, to systemd and to any restart policy reading `$?`, so a
+       * boot that failed was indistinguishable from one that was asked to stop. Sentry cannot stand in
+       * for the code either — with no DSN configured the SDK discards the event, which is the state
+       * this platform boots in. Say it where the container's own logs are, then leave with 1.
+       */
+      console.error('fatal: the service could not start', e)
+      Sentry.captureException(e)
+      // Same reason as disconnectAllDatabases()'s own exit: nothing survives to flush the SDK's
+      // queue once process.exit() runs, so the event above would never leave the process.
+      await Sentry.flush(2000)
+      process.exit(1)
+    })
 }
 /* v8 ignore stop */

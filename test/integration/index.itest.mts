@@ -32,13 +32,13 @@ const ACCESS_TTL_MAX = 5459
 const PASSWORD_HASH = `$2y$14$${'x'.repeat(53)}`
 // Must match the server's cookie signer exactly (see createServer): same keys, same SHA-512.
 const keys = new Keygrip(
-	ITEST_KEYGRIP_KEYS.map((key) => key.material),
-	'sha512'
+  ITEST_KEYGRIP_KEYS.map((key) => key.material),
+  'sha512'
 )
 
 // A refresh cookie the way Koa emits it: the value plus its `.sig` Keygrip signature.
 function signedCookie(refresh: string): string {
-	return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
+  return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
 }
 
 // What a caller of this service carries, and the only thing it accepts: a signed refresh cookie whose
@@ -46,10 +46,10 @@ function signedCookie(refresh: string): string {
 // Apollo and of the health route alike, so every request below needs one — there is no header that
 // stands in for it.
 async function authHeaders() {
-	const { _id } = await seedShopOwner()
-	const refresh = await seedSession(_id)
+  const { _id } = await seedShopOwner()
+  const refresh = await seedSession(_id)
 
-	return { cookie: signedCookie(refresh) }
+  return { cookie: signedCookie(refresh) }
 }
 
 let keygripWatch: NodeJS.Timeout
@@ -60,26 +60,26 @@ let base: string
 
 /** POST a GraphQL document to the real endpoint and return status + parsed body. */
 async function gql(query: string, headers: Record<string, string> = {}) {
-	const res = await fetch(`${base}${ENDPOINT}`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json', ...headers },
-		body: JSON.stringify({ query })
-	})
+  const res = await fetch(`${base}${ENDPOINT}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({ query })
+  })
 
-	return {
-		status: res.status,
-		// refresh re-issues the cookie through setLoginCookies; the rotation test reads the new
-		// token back out of here, because it is never returned in the GraphQL payload.
-		setCookie: res.headers.getSetCookie(),
-		// tdwKoaErrorHandler answers rejected requests with {message, description}; Apollo answers
-		// accepted ones with {data, errors}. One parse covers both shapes.
-		json: (await res.json()) as {
-			data?: Record<string, unknown>
-			errors?: Array<{ message: string }>
-			message?: string
-			description?: string
-		}
-	}
+  return {
+    status: res.status,
+    // refresh re-issues the cookie through setLoginCookies; the rotation test reads the new
+    // token back out of here, because it is never returned in the GraphQL payload.
+    setCookie: res.headers.getSetCookie(),
+    // tdwKoaErrorHandler answers rejected requests with {message, description}; Apollo answers
+    // accepted ones with {data, errors}. One parse covers both shapes.
+    json: (await res.json()) as {
+      data?: Record<string, unknown>
+      errors?: Array<{ message: string }>
+      message?: string
+      description?: string
+    }
+  }
 }
 
 /****************************************************************************************
@@ -93,14 +93,14 @@ const seededKeys: string[] = []
 
 /** The raw driver handle — only defined once start() has connected. */
 function db() {
-	return mongoose.connection.db!
+  return mongoose.connection.db!
 }
 
 /** Remember a session key so afterAll removes it even if the test that created it fails. */
 function track(key: string) {
-	seededKeys.push(key)
+  seededKeys.push(key)
 
-	return key
+  return key
 }
 
 /**
@@ -123,33 +123,33 @@ function track(key: string) {
  * `disabled` and `waitApprov` are not personal data and stay in the clear.
  */
 async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<string, unknown> = {}) {
-	const email = `itest-${randomUUID()}@marketplace.invalid`
-	const _id = new mongoose.Types.ObjectId()
+  const email = `itest-${randomUUID()}@marketplace.invalid`
+  const _id = new mongoose.Types.ObjectId()
 
-	await db()
-		.collection('shopOwner')
-		.insertOne(
-			await encryptDocument(
-				{
-					_id,
-					login: { email, password: PASSWORD_HASH, ...login },
-					personalData: {
-						firstName: 'Itest',
-						lastName: 'ShopOwner',
-						birth: { date: new Date('1980-01-01T00:00:00Z') },
-						address: { street: '1 Test Street', postalCode: '01103', city: 'Springfield', province: 'MA' },
-						contacts: { mobile: '3900000000', email }
-					},
-					registeredAt: new Date(),
-					...top
-				},
-				ENCRYPTED_FIELDS_SHOP_OWNER,
-				KEY_ALT_NAME_SHOP_OWNER
-			)
-		)
-	seededIds.push(_id)
+  await db()
+    .collection('shopOwner')
+    .insertOne(
+      await encryptDocument(
+        {
+          _id,
+          login: { email, password: PASSWORD_HASH, ...login },
+          personalData: {
+            firstName: 'Itest',
+            lastName: 'ShopOwner',
+            birth: { date: new Date('1980-01-01T00:00:00Z') },
+            address: { street: '1 Test Street', postalCode: '01103', city: 'Springfield', province: 'MA' },
+            contacts: { mobile: '3900000000', email }
+          },
+          registeredAt: new Date(),
+          ...top
+        },
+        ENCRYPTED_FIELDS_SHOP_OWNER,
+        KEY_ALT_NAME_SHOP_OWNER
+      )
+    )
+  seededIds.push(_id)
 
-	return { _id, email }
+  return { _id, email }
 }
 
 /**
@@ -161,11 +161,11 @@ async function seedShopOwner(login: Record<string, unknown> = {}, top: Record<st
  * gate would fail for a reason that has nothing to do with what it asserts.
  */
 async function seedSession(_id: mongoose.Types.ObjectId, lineage = sessionLineage()) {
-	const refresh = randomUUID()
-	const refreshKey = track(sessionKey(`refresh:${refresh}`))
-	await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+  const refresh = randomUUID()
+  const refreshKey = track(sessionKey(`refresh:${refresh}`))
+  await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
 
-	return refresh
+  return refresh
 }
 
 /**
@@ -181,13 +181,13 @@ async function seedSession(_id: mongoose.Types.ObjectId, lineage = sessionLineag
  * is what it was — Qodana's DuplicatedCode found the second and third, byte for byte.
  */
 async function seedRotatableSession(_id: mongoose.Types.ObjectId, lineage = sessionLineage()) {
-	const refresh = randomUUID()
-	const refreshKey = track(sessionKey(`refresh:${refresh}`))
-	const keyFamily = track(familyKey(lineage.familyId))
-	const keyTombstone = track(tombstoneKey(`refresh:${refresh}`))
-	await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
+  const refresh = randomUUID()
+  const refreshKey = track(sessionKey(`refresh:${refresh}`))
+  const keyFamily = track(familyKey(lineage.familyId))
+  const keyTombstone = track(tombstoneKey(`refresh:${refresh}`))
+  await redisClient.hSet(refreshKey, { _id: _id.toHexString(), tier: TIER.shopOwner, ...lineage })
 
-	return { refresh, refreshKey, lineage, keyFamily, keyTombstone }
+  return { refresh, refreshKey, lineage, keyFamily, keyTombstone }
 }
 
 /**
@@ -199,29 +199,29 @@ async function seedRotatableSession(_id: mongoose.Types.ObjectId, lineage = sess
  * ahead of it, so nothing in this file trips the absolute cap by accident. The cap test overrides both.
  */
 function sessionLineage(over: Record<string, string> = {}) {
-	return { familyId: randomUUID(), originalLogin: `${Date.now()}`, sessionCapDays: '30', ...over }
+  return { familyId: randomUUID(), originalLogin: `${Date.now()}`, sessionCapDays: '30', ...over }
 }
 
 /** The refresh token Koa just set, read back out of the Set-Cookie headers. */
 function refreshTokenFrom(setCookie: string[]) {
-	const header = setCookie.find((cookie) => cookie.startsWith('refresh_token='))
-	if (!header) throw new Error('refresh did not set a refresh_token cookie')
+  const header = setCookie.find((cookie) => cookie.startsWith('refresh_token='))
+  if (!header) throw new Error('refresh did not set a refresh_token cookie')
 
-	return header.slice('refresh_token='.length).split(';')[0]
+  return header.slice('refresh_token='.length).split(';')[0]
 }
 
 beforeAll(async () => {
-	const server = await start()
-	if (!server) throw new Error('server failed to start against the real Redis cluster / MongoDB')
-	httpServer = server.httpServer
-	// Both belong to the live key watch (ADR-034), and both have to be handed back for the drain below:
-	// the timer is unref'd but still fires while the suite runs, and the subscriber is a second
-	// connection nothing else in this file knows about.
-	keygripWatch = server.keygripWatch
-	keygripSubscriber = server.keygripSubscriber
-	const address = httpServer.address() as AddressInfo | null
-	if (!address || typeof address === 'string') throw new Error('no TCP address on the booted server')
-	base = `http://127.0.0.1:${address.port}`
+  const server = await start()
+  if (!server) throw new Error('server failed to start against the real Redis cluster / MongoDB')
+  httpServer = server.httpServer
+  // Both belong to the live key watch (ADR-034), and both have to be handed back for the drain below:
+  // the timer is unref'd but still fires while the suite runs, and the subscriber is a second
+  // connection nothing else in this file knows about.
+  keygripWatch = server.keygripWatch
+  keygripSubscriber = server.keygripSubscriber
+  const address = httpServer.address() as AddressInfo | null
+  if (!address || typeof address === 'string') throw new Error('no TCP address on the booted server')
+  base = `http://127.0.0.1:${address.port}`
 })
 
 /**
@@ -232,122 +232,122 @@ beforeAll(async () => {
  * sits in the cluster for its whole TTL, which for a refresh session is 90 days.
  */
 async function drainSafely(what: string, remove: () => Promise<unknown>) {
-	try {
-		await remove()
-	} catch (error) {
-		console.error(`[afterAll] cleanup failed for ${what}:`, error)
-	}
+  try {
+    await remove()
+  } catch (error) {
+    console.error(`[afterAll] cleanup failed for ${what}:`, error)
+  }
 }
 
 afterAll(async () => {
-	// Drop whatever this run created while the handles are still open: documents first, then
-	// any session key. One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
-	for (const _id of seededIds) {
-		await drainSafely(`shopOwner ${_id.toString()}`, () => db().collection('shopOwner').deleteOne({ _id }))
-	}
-	for (const key of seededKeys) {
-		await drainSafely(key, () => redisClient.del(key))
-	}
+  // Drop whatever this run created while the handles are still open: documents first, then
+  // any session key. One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
+  for (const _id of seededIds) {
+    await drainSafely(`shopOwner ${_id.toString()}`, () => db().collection('shopOwner').deleteOne({ _id }))
+  }
+  for (const key of seededKeys) {
+    await drainSafely(key, () => redisClient.del(key))
+  }
 
-	// The watch first: a poll that fires against a closing client would report an error nobody caused.
-	clearInterval(keygripWatch)
-	await drainSafely('keygrip subscriber', () => keygripSubscriber.close())
+  // The watch first: a poll that fires against a closing client would report an error nobody caused.
+  clearInterval(keygripWatch)
+  await drainSafely('keygrip subscriber', () => keygripSubscriber.close())
 
-	await new Promise<void>((resolve) => httpServer.close(() => resolve()))
-	await redisClient.close()
-	await mongoose.disconnect()
+  await new Promise<void>((resolve) => httpServer.close(() => resolve()))
+  await redisClient.close()
+  await mongoose.disconnect()
 })
 
 describe('authenticated-authorization service (integration, real MongoDB + real Redis cluster)', () => {
-	// start() is what wires both datasources; asserting the live handles is what makes the rest of
-	// this file an integration suite rather than an in-process schema test.
-	it('has a live MongoDB connection', () => {
-		expect(mongoose.connection.readyState).toBe(1)
-	})
+  // start() is what wires both datasources; asserting the live handles is what makes the rest of
+  // this file an integration suite rather than an in-process schema test.
+  it('has a live MongoDB connection', () => {
+    expect(mongoose.connection.readyState).toBe(1)
+  })
 
-	it('has a live Redis cluster connection, round-tripping a key in the isolated namespace', async () => {
-		const key = `${REDIS_KEY}ping:${randomUUID()}`
+  it('has a live Redis cluster connection, round-tripping a key in the isolated namespace', async () => {
+    const key = `${REDIS_KEY}ping:${randomUUID()}`
 
-		// EX so this one cannot outlive the run. It is never registered for the afterAll drain, so
-		// without a TTL a hard kill — or a throw on the assertion below — strands it on the cluster
-		// forever. 60s is far longer than the round trip and short enough to be self-cleaning.
-		await redisClient.set(key, 'pong', { EX: 60 })
-		expect(await redisClient.get(key)).toBe('pong')
+    // EX so this one cannot outlive the run. It is never registered for the afterAll drain, so
+    // without a TTL a hard kill — or a throw on the assertion below — strands it on the cluster
+    // forever. 60s is far longer than the round trip and short enough to be self-cleaning.
+    await redisClient.set(key, 'pong', { EX: 60 })
+    expect(await redisClient.get(key)).toBe('pong')
 
-		await redisClient.del(key)
-		expect(await redisClient.get(key)).toBeNull()
-	})
+    await redisClient.del(key)
+    expect(await redisClient.get(key)).toBeNull()
+  })
 })
 
 describe('refresh-cookie gate over HTTP', () => {
-	it('answers 412 when the request carries no cookie at all', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }')
+  it('answers 412 when the request carries no cookie at all', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }')
 
-		expect(status).toBe(412)
-		expect(json.message).toBe('Precondition Failed')
-	})
+    expect(status).toBe(412)
+    expect(json.message).toBe('Precondition Failed')
+  })
 
-	it('answers 401 when the Keygrip signature does not verify (tampered cookie)', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', {
-			cookie: `refresh_token=${randomUUID()}; refresh_token.sig=forged`
-		})
+  it('answers 401 when the Keygrip signature does not verify (tampered cookie)', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }', {
+      cookie: `refresh_token=${randomUUID()}; refresh_token.sig=forged`
+    })
 
-		expect(status).toBe(401)
-		expect(json.message).toBe('Unauthorized')
-	})
+    expect(status).toBe(401)
+    expect(json.message).toBe('Unauthorized')
+  })
 
-	// A cookie header that never carried a refresh_token at all — distinct from the empty-header
-	// 412 above (verifySignedRefreshToken reads a defined cookie string here, then finds no
-	// refresh_token key in it) and from the forged-signature 401 below.
-	it('answers 499 when the cookie header carries no refresh_token key', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: 'unrelated=value' })
+  // A cookie header that never carried a refresh_token at all — distinct from the empty-header
+  // 412 above (verifySignedRefreshToken reads a defined cookie string here, then finds no
+  // refresh_token key in it) and from the forged-signature 401 below.
+  it('answers 499 when the cookie header carries no refresh_token key', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: 'unrelated=value' })
 
-		expect(status).toBe(499)
-		expect(json.message).toBe('Token Required')
-		expect(json.description).toBe('Refresh Token Required.')
-	})
+    expect(status).toBe(499)
+    expect(json.message).toBe('Token Required')
+    expect(json.description).toBe('Refresh Token Required.')
+  })
 
-	// An unsigned cookie: refresh_token is present but its .sig sibling never was. This is a
-	// different branch of verifySignedRefreshToken than the forged-signature case above — that one
-	// reaches the Keygrip index() check, this one never does because there is no signature to check.
-	it('answers 499 when the refresh_token cookie carries no signature (unsigned cookie)', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: `refresh_token=${randomUUID()}` })
+  // An unsigned cookie: refresh_token is present but its .sig sibling never was. This is a
+  // different branch of verifySignedRefreshToken than the forged-signature case above — that one
+  // reaches the Keygrip index() check, this one never does because there is no signature to check.
+  it('answers 499 when the refresh_token cookie carries no signature (unsigned cookie)', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: `refresh_token=${randomUUID()}` })
 
-		expect(status).toBe(499)
-		expect(json.message).toBe('Token Required')
-		expect(json.description).toBe('Refresh Token Signature Required.')
-	})
+    expect(status).toBe(499)
+    expect(json.message).toBe('Token Required')
+    expect(json.description).toBe('Refresh Token Signature Required.')
+  })
 
-	it('answers 498 when the signature is good but the session is gone from Redis', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(randomUUID()) })
+  it('answers 498 when the signature is good but the session is gone from Redis', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(randomUUID()) })
 
-		expect(status).toBe(498)
-		expect(json.message).toBe('Invalid Token')
-	})
+    expect(status).toBe(498)
+    expect(json.message).toBe('Invalid Token')
+  })
 
-	// The session really exists on the cluster, so the request gets past Redis and dies in MongoDB:
-	// the _id it points at matches no shopOwner. This is the one case that exercises both
-	// datasources in a single request, which no unit test can do.
-	it('answers 401 when the live session points at an shopOwner MongoDB does not have', async () => {
-		const refresh = randomUUID()
-		const refreshKey = sessionKey(`refresh:${refresh}`)
-		// Correct tier, so the request really does reach MongoDB and die there — a tier-less seed
-		// would answer 403 at the guard and prove nothing about the lookup this test is about.
-		await redisClient.hSet(refreshKey, {
-			_id: new mongoose.Types.ObjectId().toHexString(),
-			tier: TIER.shopOwner,
-			...sessionLineage()
-		})
+  // The session really exists on the cluster, so the request gets past Redis and dies in MongoDB:
+  // the _id it points at matches no shopOwner. This is the one case that exercises both
+  // datasources in a single request, which no unit test can do.
+  it('answers 401 when the live session points at an shopOwner MongoDB does not have', async () => {
+    const refresh = randomUUID()
+    const refreshKey = sessionKey(`refresh:${refresh}`)
+    // Correct tier, so the request really does reach MongoDB and die there — a tier-less seed
+    // would answer 403 at the guard and prove nothing about the lookup this test is about.
+    await redisClient.hSet(refreshKey, {
+      _id: new mongoose.Types.ObjectId().toHexString(),
+      tier: TIER.shopOwner,
+      ...sessionLineage()
+    })
 
-		try {
-			const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
+    try {
+      const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
 
-			expect(status).toBe(401)
-			expect(json.message).toBe('Unauthorized')
-		} finally {
-			await redisClient.del(refreshKey)
-		}
-	})
+      expect(status).toBe(401)
+      expect(json.message).toBe('Unauthorized')
+    } finally {
+      await redisClient.del(refreshKey)
+    }
+  })
 })
 
 // The shopOwner-missing case above proves the Mongo round-trip on a miss. These prove it on a
@@ -355,49 +355,49 @@ describe('refresh-cookie gate over HTTP', () => {
 // runs against its real deleted/disabled/waitApprov fields rather than a fixture object built by
 // hand. Only the raw driver can put a document in each of these states past the real validator.
 describe('shopOwner state gates against the real collection', () => {
-	it('answers 401 when the live session points at an shopOwner that was deleted', async () => {
-		const { _id } = await seedShopOwner({}, { deleted: new Date() })
-		const refresh = await seedSession(_id)
+  it('answers 401 when the live session points at an shopOwner that was deleted', async () => {
+    const { _id } = await seedShopOwner({}, { deleted: new Date() })
+    const refresh = await seedSession(_id)
 
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
 
-		expect(status).toBe(401)
-		expect(json.message).toBe('Unauthorized')
-	})
+    expect(status).toBe(401)
+    expect(json.message).toBe('Unauthorized')
+  })
 
-	it('answers 401 when the live session points at an shopOwner that is disabled', async () => {
-		// ⚠️ The reason travels with the flag because the collection demands it: ADR-044 added
-		// `dependencies: { disabled: ['disabledReason'] }` to the validator, so a seed carrying the flag
-		// alone is refused by the server before this gate is ever reached. It is encrypted on the way in
-		// like every other personal path, which `seedShopOwner` handles by spreading before it encrypts.
-		const { _id } = await seedShopOwner({}, { disabled: true, disabledReason: 'itest suspension' })
-		const refresh = await seedSession(_id)
+  it('answers 401 when the live session points at an shopOwner that is disabled', async () => {
+    // ⚠️ The reason travels with the flag because the collection demands it: ADR-044 added
+    // `dependencies: { disabled: ['disabledReason'] }` to the validator, so a seed carrying the flag
+    // alone is refused by the server before this gate is ever reached. It is encrypted on the way in
+    // like every other personal path, which `seedShopOwner` handles by spreading before it encrypts.
+    const { _id } = await seedShopOwner({}, { disabled: true, disabledReason: 'itest suspension' })
+    const refresh = await seedSession(_id)
 
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
 
-		expect(status).toBe(401)
-		expect(json.message).toBe('Unauthorized')
-	})
+    expect(status).toBe(401)
+    expect(json.message).toBe('Unauthorized')
+  })
 
-	// waitApprov is BC-03's manual-approval gate. Until the approval fix nothing on the platform read
-	// it, so this case asserted the opposite of what it asserts now: an admin could park a shop
-	// owner pending review and the session already in that shop owner's hands kept working until the
-	// refresh token expired, days later. `checkShopOwnerApproval` runs on every refresh for the same
-	// reason `findAccountForSession` runs the disabled/deleted gate there instead of at login only —
-	// revocation should bite within one access-token lifetime.
-	//
-	// A real waitApprov:true document has to reach the real gate. A mocked helper would pass even if
-	// the projection stopped asking for the field, which is the one mistake that makes this gate
-	// silently unreachable: `checkShopOwnerApproval` cannot refuse a flag it was never handed.
-	it('gates on waitApprov: a live session for a shop owner awaiting approval is refused', async () => {
-		const { _id } = await seedShopOwner({}, { waitApprov: true })
-		const refresh = await seedSession(_id)
+  // waitApprov is BC-03's manual-approval gate. Until the approval fix nothing on the platform read
+  // it, so this case asserted the opposite of what it asserts now: an admin could park a shop
+  // owner pending review and the session already in that shop owner's hands kept working until the
+  // refresh token expired, days later. `checkShopOwnerApproval` runs on every refresh for the same
+  // reason `findAccountForSession` runs the disabled/deleted gate there instead of at login only —
+  // revocation should bite within one access-token lifetime.
+  //
+  // A real waitApprov:true document has to reach the real gate. A mocked helper would pass even if
+  // the projection stopped asking for the field, which is the one mistake that makes this gate
+  // silently unreachable: `checkShopOwnerApproval` cannot refuse a flag it was never handed.
+  it('gates on waitApprov: a live session for a shop owner awaiting approval is refused', async () => {
+    const { _id } = await seedShopOwner({}, { waitApprov: true })
+    const refresh = await seedSession(_id)
 
-		const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
+    const { status, json } = await gql('{ helloRefresh { txt } }', { cookie: signedCookie(refresh) })
 
-		expect(status).toBe(401)
-		expect(json.message).toBe('Unauthorized')
-	})
+    expect(status).toBe(401)
+    expect(json.message).toBe('Unauthorized')
+  })
 })
 
 // The whole point of this service. Every earlier case stops at the gate; these two drive the
@@ -405,180 +405,180 @@ describe('shopOwner state gates against the real collection', () => {
 // can show hSet was called — only the live cluster shows the rotated session another service
 // will read, and that the token just spent is really gone.
 describe('refresh rotates the session on the cluster', () => {
-	const mutation = 'mutation { refresh { status accessToken } }'
+  const mutation = 'mutation { refresh { status accessToken } }'
 
-	it('writes the new pair, arms both TTLs, and deletes the refresh token it consumed', async () => {
-		const { _id, email } = await seedShopOwner()
-		const { refresh: oldRefresh, refreshKey: oldRefreshKey, lineage, keyFamily, keyTombstone } = await seedRotatableSession(_id)
+  it('writes the new pair, arms both TTLs, and deletes the refresh token it consumed', async () => {
+    const { _id, email } = await seedShopOwner()
+    const { refresh: oldRefresh, refreshKey: oldRefreshKey, lineage, keyFamily, keyTombstone } = await seedRotatableSession(_id)
 
-		const { status, json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
+    const { status, json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
 
-		expect(status).toBe(200)
-		expect(json.errors).toBeUndefined()
+    expect(status).toBe(200)
+    expect(json.errors).toBeUndefined()
 
-		// A 200 means the rotation already wrote both keys on the cluster, so they are registered
-		// here rather than after the assertions below — a failing expect would otherwise strand the
-		// new refresh hash for its whole 90-day TTL.
-		const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
-		const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
-		const newRefreshKey = track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
+    // A 200 means the rotation already wrote both keys on the cluster, so they are registered
+    // here rather than after the assertions below — a failing expect would otherwise strand the
+    // new refresh hash for its whole 90-day TTL.
+    const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
+    const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
+    const newRefreshKey = track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
 
-		expect(refreshed.status).toBe(true)
-		expect(refreshed.accessToken).not.toBe('')
-		expect(newRefreshKey).not.toBe(oldRefreshKey)
+    expect(refreshed.status).toBe(true)
+    expect(refreshed.accessToken).not.toBe('')
+    expect(newRefreshKey).not.toBe(oldRefreshKey)
 
-		// The handler rebuilt ctx.state.user out of Redis + MongoDB and the resolver strips
-		// refreshToken back off it, so the new access hash is exactly what the resource tier reads.
-		expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, tier: TIER.shopOwner })
-		// The lineage rides through the rotation unchanged — a family or a login date minted afresh here
-		// would hand the session an unlimited life one refresh at a time — and the successor names the
-		// access token minted beside it, asserted as the very key read two lines above: that
-		// field is what lets the next rotation, and every logout, find the access half without being
-		// handed it in a header.
-		expect(await redisClient.hGetAll(newRefreshKey)).toEqual({
-			_id: _id.toHexString(),
-			tier: TIER.shopOwner,
-			...lineage,
-			accessKey
-		})
+    // The handler rebuilt ctx.state.user out of Redis + MongoDB and the resolver strips
+    // refreshToken back off it, so the new access hash is exactly what the resource tier reads.
+    expect(await redisClient.hGetAll(accessKey)).toEqual({ _id: _id.toHexString(), email, tier: TIER.shopOwner })
+    // The lineage rides through the rotation unchanged — a family or a login date minted afresh here
+    // would hand the session an unlimited life one refresh at a time — and the successor names the
+    // access token minted beside it, asserted as the very key read two lines above: that
+    // field is what lets the next rotation, and every logout, find the access half without being
+    // handed it in a header.
+    expect(await redisClient.hGetAll(newRefreshKey)).toEqual({
+      _id: _id.toHexString(),
+      tier: TIER.shopOwner,
+      ...lineage,
+      accessKey
+    })
 
-		// Both expire() calls really ran, and ran *after* the hSet. A key whose TTL was armed
-		// before its fields would read -1 here.
-		const accessTtl = await redisClient.ttl(accessKey)
-		expect(accessTtl).toBeGreaterThanOrEqual(ACCESS_TTL_MIN - 5)
-		expect(accessTtl).toBeLessThanOrEqual(ACCESS_TTL_MAX)
-		expect(await redisClient.ttl(newRefreshKey)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
+    // Both expire() calls really ran, and ran *after* the hSet. A key whose TTL was armed
+    // before its fields would read -1 here.
+    const accessTtl = await redisClient.ttl(accessKey)
+    expect(accessTtl).toBeGreaterThanOrEqual(ACCESS_TTL_MIN - 5)
+    expect(accessTtl).toBeLessThanOrEqual(ACCESS_TTL_MAX)
+    expect(await redisClient.ttl(newRefreshKey)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
 
-		// One refresh token, one use.
-		expect(await redisClient.hGetAll(oldRefreshKey)).toEqual({})
+    // One refresh token, one use.
+    expect(await redisClient.hGetAll(oldRefreshKey)).toEqual({})
 
-		// ⚠️ And the use left a marker. Without it a replay of the token just consumed is
-		// indistinguishable from ordinary expiry, which is the whole difference between "your session
-		// ended" and "someone else is holding your refresh token".
-		const tombstone = await redisClient.hGetAll(keyTombstone)
-		expect(tombstone.familyId).toBe(lineage.familyId)
-		expect(Number(tombstone.consumedAt)).toBeGreaterThan(Date.now() - 60_000)
-		expect(await redisClient.ttl(keyTombstone)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
+    // ⚠️ And the use left a marker. Without it a replay of the token just consumed is
+    // indistinguishable from ordinary expiry, which is the whole difference between "your session
+    // ended" and "someone else is holding your refresh token".
+    const tombstone = await redisClient.hGetAll(keyTombstone)
+    expect(tombstone.familyId).toBe(lineage.familyId)
+    expect(Number(tombstone.consumedAt)).toBeGreaterThan(Date.now() - 60_000)
+    expect(await redisClient.ttl(keyTombstone)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
 
-		// Both halves of the new pair are filed into the family the old session belonged to, which is
-		// what a revocation walks when this token is replayed.
-		expect((await redisClient.sMembers(keyFamily)).sort()).toEqual([accessKey, newRefreshKey].sort())
-		expect(await redisClient.ttl(keyFamily)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
-	})
+    // Both halves of the new pair are filed into the family the old session belonged to, which is
+    // what a revocation walks when this token is replayed.
+    expect((await redisClient.sMembers(keyFamily)).sort()).toEqual([accessKey, newRefreshKey].sort())
+    expect(await redisClient.ttl(keyFamily)).toBeGreaterThan(REFRESH_TOKEN_EXPIRY - 60)
+  })
 
-	/*
-	 * Access-token retirement on the cluster. The access token the call arrives with is retired by the rotation, so it
-	 * stops working the moment its successor is minted instead of living out the rest of its 30-to-91
-	 * minute window in parallel.
-	 *
-	 * ⚠️ **Asserted as the absence of the key, not as a 401 from the resource service**, which this
-	 * suite cannot boot: the access hash *is* what a resource service reads on every request, so a key
-	 * that is gone from the cluster is a token that tier can no longer resolve. The moment the resource
-	 * tiers grow an integration suite of their own, the end-to-end half belongs there.
-	 */
-	it('retires the access token the call was made with', async () => {
-		const { _id } = await seedShopOwner()
-		const { refresh: oldRefresh } = await seedRotatableSession(_id)
+  /*
+   * Access-token retirement on the cluster. The access token the call arrives with is retired by the rotation, so it
+   * stops working the moment its successor is minted instead of living out the rest of its 30-to-91
+   * minute window in parallel.
+   *
+   * ⚠️ **Asserted as the absence of the key, not as a 401 from the resource service**, which this
+   * suite cannot boot: the access hash *is* what a resource service reads on every request, so a key
+   * that is gone from the cluster is a token that tier can no longer resolve. The moment the resource
+   * tiers grow an integration suite of their own, the end-to-end half belongs there.
+   */
+  it('retires the access token the call was made with', async () => {
+    const { _id } = await seedShopOwner()
+    const { refresh: oldRefresh } = await seedRotatableSession(_id)
 
-		// The access half of the same session, written the way a login writes it.
-		const oldAccess = randomUUID()
-		const oldAccessKey = track(sessionKey(`access:${oldAccess}`))
-		await redisClient.hSet(oldAccessKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
+    // The access half of the same session, written the way a login writes it.
+    const oldAccess = randomUUID()
+    const oldAccessKey = track(sessionKey(`access:${oldAccess}`))
+    await redisClient.hSet(oldAccessKey, { _id: _id.toHexString(), tier: TIER.shopOwner })
 
-		const { status, json, setCookie } = await gql(mutation, {
-			cookie: signedCookie(oldRefresh),
-			authorization: `Bearer access:${oldAccess}`
-		})
+    const { status, json, setCookie } = await gql(mutation, {
+      cookie: signedCookie(oldRefresh),
+      authorization: `Bearer access:${oldAccess}`
+    })
 
-		expect(status).toBe(200)
-		const refreshed = json.data?.refresh as { accessToken: string }
-		track(sessionKey(`access:${refreshed.accessToken}`))
-		track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
+    expect(status).toBe(200)
+    const refreshed = json.data?.refresh as { accessToken: string }
+    track(sessionKey(`access:${refreshed.accessToken}`))
+    track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
 
-		expect(await redisClient.hGetAll(oldAccessKey)).toEqual({})
-	})
+    expect(await redisClient.hGetAll(oldAccessKey)).toEqual({})
+  })
 
-	/*
-	 * The absolute cap on the cluster. The cookie is still physically valid — `setLoginCookies` gives it the full
-	 * `REFRESH_TOKEN_EXPIRY`, and nothing here touches that — and the session is refused anyway,
-	 * because the cap is enforced server-side against `originalLogin`. That is the difference the
-	 * "remember me" box has always implied and never had.
-	 */
-	it('refuses a session past its absolute cap while its cookie is still valid', async () => {
-		const { _id } = await seedShopOwner()
-		const lineage = sessionLineage({ sessionCapDays: '1', originalLogin: `${Date.now() - 2 * 86_400_000}` })
-		const refresh = await seedSession(_id, lineage)
-		track(familyKey(lineage.familyId))
+  /*
+   * The absolute cap on the cluster. The cookie is still physically valid — `setLoginCookies` gives it the full
+   * `REFRESH_TOKEN_EXPIRY`, and nothing here touches that — and the session is refused anyway,
+   * because the cap is enforced server-side against `originalLogin`. That is the difference the
+   * "remember me" box has always implied and never had.
+   */
+  it('refuses a session past its absolute cap while its cookie is still valid', async () => {
+    const { _id } = await seedShopOwner()
+    const lineage = sessionLineage({ sessionCapDays: '1', originalLogin: `${Date.now() - 2 * 86_400_000}` })
+    const refresh = await seedSession(_id, lineage)
+    track(familyKey(lineage.familyId))
 
-		const { status, json } = await gql(mutation, { cookie: signedCookie(refresh) })
+    const { status, json } = await gql(mutation, { cookie: signedCookie(refresh) })
 
-		expect(status).toBe(498)
-		expect(json.message).toBe('Invalid Token')
+    expect(status).toBe(498)
+    expect(json.message).toBe('Invalid Token')
 
-		// Refused *and* revoked: the family goes with it, so the access token minted by the last
-		// rotation of that session cannot outlive the refusal.
-		expect(await redisClient.exists(familyKey(lineage.familyId))).toBe(0)
-	})
+    // Refused *and* revoked: the family goes with it, so the access token minted by the last
+    // rotation of that session cannot outlive the refusal.
+    expect(await redisClient.exists(familyKey(lineage.familyId))).toBe(0)
+  })
 
-	it('carries onboardingStep through the rotation once onboarding is done', async () => {
-		const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
-		const { refresh: oldRefresh } = await seedRotatableSession(_id)
+  it('carries onboardingStep through the rotation once onboarding is done', async () => {
+    const { _id, email } = await seedShopOwner({ onboardingDone: true, onboardingStep: 'p3' })
+    const { refresh: oldRefresh } = await seedRotatableSession(_id)
 
-		const { json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
-		expect(json.errors).toBeUndefined()
+    const { json, setCookie } = await gql(mutation, { cookie: signedCookie(oldRefresh) })
+    expect(json.errors).toBeUndefined()
 
-		const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
-		const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
-		track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
+    const refreshed = json.data?.refresh as { status: boolean; accessToken: string }
+    const accessKey = track(sessionKey(`access:${refreshed.accessToken}`))
+    track(sessionKey(`refresh:${refreshTokenFrom(setCookie)}`))
 
-		// makeOnboardingData only yields a step once onboardingDone is set, and it rides along
-		// into the access hash — the shopOwner frontend reads it straight back from there.
-		expect(await redisClient.hGetAll(accessKey)).toEqual({
-			_id: _id.toHexString(),
-			email,
-			tier: TIER.shopOwner,
-			onboardingStep: 'p3'
-		})
-	})
+    // makeOnboardingData only yields a step once onboardingDone is set, and it rides along
+    // into the access hash — the shopOwner frontend reads it straight back from there.
+    expect(await redisClient.hGetAll(accessKey)).toEqual({
+      _id: _id.toHexString(),
+      email,
+      tier: TIER.shopOwner,
+      onboardingStep: 'p3'
+    })
+  })
 })
 
 describe('GraphQL over HTTP', () => {
-	it('serves the query to a caller carrying a live session', async () => {
-		const { status, json } = await gql('{ helloRefresh { txt } }', await authHeaders())
+  it('serves the query to a caller carrying a live session', async () => {
+    const { status, json } = await gql('{ helloRefresh { txt } }', await authHeaders())
 
-		expect(status).toBe(200)
-		expect(json.errors).toBeUndefined()
-		expect(json.data).toEqual({ helloRefresh: { txt: 'Hello from helloRefresh' } })
-	})
+    expect(status).toBe(200)
+    expect(json.errors).toBeUndefined()
+    expect(json.data).toEqual({ helloRefresh: { txt: 'Hello from helloRefresh' } })
+  })
 
-	// Introspection stays open outside production (buildValidationRules returns no rules), and the
-	// schema it reports is the one really assembled in createServer — not a copy rebuilt by a test.
-	it('exposes the assembled schema through introspection', async () => {
-		const { json } = await gql('{ __schema { queryType { name } mutationType { name } } }', await authHeaders())
+  // Introspection stays open outside production (buildValidationRules returns no rules), and the
+  // schema it reports is the one really assembled in createServer — not a copy rebuilt by a test.
+  it('exposes the assembled schema through introspection', async () => {
+    const { json } = await gql('{ __schema { queryType { name } mutationType { name } } }', await authHeaders())
 
-		expect(json.errors).toBeUndefined()
-		expect(json.data).toEqual({ __schema: { queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } } })
-	})
+    expect(json.errors).toBeUndefined()
+    expect(json.data).toEqual({ __schema: { queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } } })
+  })
 
-	it('rejects a GET on the GraphQL endpoint (csrfPrevention / method not allowed)', async () => {
-		const res = await fetch(`${base}${ENDPOINT}?query=%7B__typename%7D`, { headers: await authHeaders() })
+  it('rejects a GET on the GraphQL endpoint (csrfPrevention / method not allowed)', async () => {
+    const res = await fetch(`${base}${ENDPOINT}?query=%7B__typename%7D`, { headers: await authHeaders() })
 
-		expect(res.status).toBeGreaterThanOrEqual(400)
-	})
+    expect(res.status).toBeGreaterThanOrEqual(400)
+  })
 })
 
 describe('non-GraphQL routes', () => {
-	it('serves /health once the cookie gate is satisfied', async () => {
-		const res = await fetch(`${base}/health`, { headers: await authHeaders() })
+  it('serves /health once the cookie gate is satisfied', async () => {
+    const res = await fetch(`${base}/health`, { headers: await authHeaders() })
 
-		expect(res.status).toBe(200)
-		const json = (await res.json()) as { status: string; timestamp: string }
-		expect(json.status).toBe('OK')
-	})
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { status: string; timestamp: string }
+    expect(json.status).toBe('OK')
+  })
 
-	it('falls through to 404 for an unknown path', async () => {
-		const res = await fetch(`${base}/nope`, { headers: await authHeaders() })
+  it('falls through to 404 for an unknown path', async () => {
+    const res = await fetch(`${base}/nope`, { headers: await authHeaders() })
 
-		expect(res.status).toBe(404)
-	})
+    expect(res.status).toBe(404)
+  })
 })

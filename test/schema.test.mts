@@ -28,77 +28,77 @@ let Hello2Type: (typeof import('../src/graphQLApi/schema/types/Hello2Type.mts'))
 let RefreshType: (typeof import('../src/graphQLApi/schema/types/RefreshType.mts'))['RefreshType']
 
 beforeAll(async () => {
-	try {
-		;({ default: MutationsApi } = await import('../src/graphQLApi/schema/mutations.mts'))
-		;({ default: QueriesApi } = await import('../src/graphQLApi/schema/queries.mts'))
-		;({ helloRefresh } = await import('../src/graphQLApi/schema/queries/helloRefresh.mts'))
-		;({ default: Hello2Type } = await import('../src/graphQLApi/schema/types/Hello2Type.mts'))
-		;({ RefreshType } = await import('../src/graphQLApi/schema/types/RefreshType.mts'))
-	} catch {
-		// Deliberately swallowed — see comment above. Whichever binding never got assigned
-		// stays undefined, and the tests that dereference it fail with their own error instead
-		// of the whole file being marked skipped.
-	}
+  try {
+    ;({ default: MutationsApi } = await import('../src/graphQLApi/schema/mutations.mts'))
+    ;({ default: QueriesApi } = await import('../src/graphQLApi/schema/queries.mts'))
+    ;({ helloRefresh } = await import('../src/graphQLApi/schema/queries/helloRefresh.mts'))
+    ;({ default: Hello2Type } = await import('../src/graphQLApi/schema/types/Hello2Type.mts'))
+    ;({ RefreshType } = await import('../src/graphQLApi/schema/types/RefreshType.mts'))
+  } catch {
+    // Deliberately swallowed — see comment above. Whichever binding never got assigned
+    // stays undefined, and the tests that dereference it fail with their own error instead
+    // of the whole file being marked skipped.
+  }
 })
 
 describe('Hello2Type', () => {
-	it('exposes only the txt field, a non-nullable String', () => {
-		const fields = Hello2Type.getFields()
+  it('exposes only the txt field, a non-nullable String', () => {
+    const fields = Hello2Type.getFields()
 
-		expect(Hello2Type.name).toBe('Hello2Type')
-		expect(Object.keys(fields)).toEqual(['txt'])
-		expect(fields.txt.type).toBeInstanceOf(GraphQLNonNull)
-		expect((fields.txt.type as GraphQLNonNull<typeof GraphQLString>).ofType).toBe(GraphQLString)
-	})
+    expect(Hello2Type.name).toBe('Hello2Type')
+    expect(Object.keys(fields)).toEqual(['txt'])
+    expect(fields.txt.type).toBeInstanceOf(GraphQLNonNull)
+    expect((fields.txt.type as GraphQLNonNull<typeof GraphQLString>).ofType).toBe(GraphQLString)
+  })
 })
 
 describe('RefreshType', () => {
-	it('exposes a non-nullable status and accessToken', () => {
-		const fields = RefreshType.getFields()
+  it('exposes a non-nullable status and accessToken', () => {
+    const fields = RefreshType.getFields()
 
-		expect(RefreshType.name).toBe('RefreshType')
-		expect(Object.keys(fields)).toEqual(['status', 'accessToken'])
-		expect((fields.status.type as GraphQLNonNull<typeof GraphQLBoolean>).ofType).toBe(GraphQLBoolean)
-		expect((fields.accessToken.type as GraphQLNonNull<typeof GraphQLString>).ofType).toBe(GraphQLString)
-	})
+    expect(RefreshType.name).toBe('RefreshType')
+    expect(Object.keys(fields)).toEqual(['status', 'accessToken'])
+    expect((fields.status.type as GraphQLNonNull<typeof GraphQLBoolean>).ofType).toBe(GraphQLBoolean)
+    expect((fields.accessToken.type as GraphQLNonNull<typeof GraphQLString>).ofType).toBe(GraphQLString)
+  })
 })
 
 describe('queries.helloRefresh', () => {
-	it('is of non-nullable Hello2Type', () => {
-		expect(helloRefresh.description).toBe('helloRefresh')
-		expect(helloRefresh.type).toBeInstanceOf(GraphQLNonNull)
-		expect((helloRefresh.type as GraphQLNonNull<GraphQLObjectType>).ofType).toBe(Hello2Type)
-	})
+  it('is of non-nullable Hello2Type', () => {
+    expect(helloRefresh.description).toBe('helloRefresh')
+    expect(helloRefresh.type).toBeInstanceOf(GraphQLNonNull)
+    expect((helloRefresh.type as GraphQLNonNull<GraphQLObjectType>).ofType).toBe(Hello2Type)
+  })
 
-	it('resolves the greeting text', () => {
-		expect(helloRefresh.resolve()).toEqual({ txt: 'Hello from helloRefresh' })
-	})
+  it('resolves the greeting text', () => {
+    expect(helloRefresh.resolve()).toEqual({ txt: 'Hello from helloRefresh' })
+  })
 })
 
 describe('QueriesApi', () => {
-	it('mounts helloRefresh as its only field', () => {
-		expect(QueriesApi.name).toBe('QueriesApi')
-		expect(Object.keys(QueriesApi.getFields())).toEqual(['helloRefresh'])
-	})
+  it('mounts helloRefresh as its only field', () => {
+    expect(QueriesApi.name).toBe('QueriesApi')
+    expect(Object.keys(QueriesApi.getFields())).toEqual(['helloRefresh'])
+  })
 
-	it('runs the query end-to-end', async () => {
-		const result = await graphql({
-			schema: new GraphQLSchema({ query: QueriesApi }),
-			source: '{ helloRefresh { txt } }'
-		})
+  it('runs the query end-to-end', async () => {
+    const result = await graphql({
+      schema: new GraphQLSchema({ query: QueriesApi }),
+      source: '{ helloRefresh { txt } }'
+    })
 
-		expect(result.errors).toBeUndefined()
-		expect(result.data).toEqual({ helloRefresh: { txt: 'Hello from helloRefresh' } })
-	})
+    expect(result.errors).toBeUndefined()
+    expect(result.data).toEqual({ helloRefresh: { txt: 'Hello from helloRefresh' } })
+  })
 })
 
 describe('MutationsApi', () => {
-	it('mounts refresh as its only field, of non-nullable RefreshType', () => {
-		const fields = MutationsApi.getFields()
+  it('mounts refresh as its only field, of non-nullable RefreshType', () => {
+    const fields = MutationsApi.getFields()
 
-		expect(MutationsApi.name).toBe('MutationsApi')
-		expect(Object.keys(fields)).toEqual(['refresh'])
-		expect(fields.refresh.description).toBe('refresh token')
-		expect((fields.refresh.type as GraphQLNonNull<GraphQLObjectType>).ofType).toBe(RefreshType)
-	})
+    expect(MutationsApi.name).toBe('MutationsApi')
+    expect(Object.keys(fields)).toEqual(['refresh'])
+    expect(fields.refresh.description).toBe('refresh token')
+    expect((fields.refresh.type as GraphQLNonNull<GraphQLObjectType>).ofType).toBe(RefreshType)
+  })
 })

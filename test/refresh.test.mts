@@ -30,10 +30,10 @@ vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hSet, e
 vi.mock('@axiumine/koa-utils/lib/setLoginCookies', () => ({ setLoginCookies }))
 // Token generation is random by design; pinning it here is what makes the Redis keys assertable.
 vi.mock('@axiumine/koa-utils/lib/tokens', () => ({
-	generateAccessToken: () => ACCESS,
-	generateRefreshToken: () => REFRESH,
-	accessTokenExpiry: () => ACCESS_EXPIRY,
-	REFRESH_TOKEN_EXPIRY: REFRESH_EXPIRY
+  generateAccessToken: () => ACCESS,
+  generateRefreshToken: () => REFRESH,
+  accessTokenExpiry: () => ACCESS_EXPIRY,
+  REFRESH_TOKEN_EXPIRY: REFRESH_EXPIRY
 }))
 vi.mock('@sentry/node', () => ({ captureException }))
 
@@ -98,157 +98,157 @@ const FIELD_TTL = 30 * 86_400 - 3_600
  * header-carrying context and quietly assert nothing about the headerless case.
  */
 function makeCtx(authorization: string | null = `Bearer ${PRESENTED_ACCESS}`) {
-	return {
-		state: {
-			user: { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner', refreshToken: OLD_REFRESH, ...LINEAGE }
-		},
-		cookies: {},
-		request: { header: authorization === null ? {} : { authorization } }
-	} as unknown as IContextAuthenticatedAuthorization
+  return {
+    state: {
+      user: { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner', refreshToken: OLD_REFRESH, ...LINEAGE }
+    },
+    cookies: {},
+    request: { header: authorization === null ? {} : { authorization } }
+  } as unknown as IContextAuthenticatedAuthorization
 }
 
 describe('refresh mutation', () => {
-	beforeEach(() => {
-		hSet.mockReset().mockResolvedValue(1)
-		expire.mockReset().mockResolvedValue(true)
-		del.mockReset().mockResolvedValue(1)
-		hExpire.mockReset().mockResolvedValue([1])
-		hDel.mockReset().mockResolvedValue(1)
-		sAdd.mockReset().mockResolvedValue(1)
-		// One mint so far this hour, and no window armed yet — an ordinary rotation, well under the limit.
-		incr.mockReset().mockResolvedValue(1)
-		ttl.mockReset().mockResolvedValue(-1)
-		setLoginCookies.mockReset()
-		captureException.mockReset()
-		// ⚠️ `Date` alone — faking wholesale would replace the microtask queue the awaited rotation runs on.
-		vi.useFakeTimers({ toFake: ['Date'] })
-		vi.setSystemTime(NOW)
-	})
+  beforeEach(() => {
+    hSet.mockReset().mockResolvedValue(1)
+    expire.mockReset().mockResolvedValue(true)
+    del.mockReset().mockResolvedValue(1)
+    hExpire.mockReset().mockResolvedValue([1])
+    hDel.mockReset().mockResolvedValue(1)
+    sAdd.mockReset().mockResolvedValue(1)
+    // One mint so far this hour, and no window armed yet — an ordinary rotation, well under the limit.
+    incr.mockReset().mockResolvedValue(1)
+    ttl.mockReset().mockResolvedValue(-1)
+    setLoginCookies.mockReset()
+    captureException.mockReset()
+    // ⚠️ `Date` alone — faking wholesale would replace the microtask queue the awaited rotation runs on.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
+  })
 
-	afterEach(() => vi.useRealTimers())
+  afterEach(() => vi.useRealTimers())
 
-	it('rotates both tokens, re-seeds Redis, sets the cookie and drops the used refresh', async () => {
-		const ctx = makeCtx()
+  it('rotates both tokens, re-seeds Redis, sets the cookie and drops the used refresh', async () => {
+    const ctx = makeCtx()
 
-		await expect(refresh.resolve(null, {}, ctx)).resolves.toEqual({ status: true, accessToken: ACCESS })
+    await expect(refresh.resolve(null, {}, ctx)).resolves.toEqual({ status: true, accessToken: ACCESS })
 
-		// The access session carries the user payload minus refreshToken and minus the lineage — the
-		// resolver strips the first so the refresh token is never readable from an access-token lookup,
-		// and the other three belong to the refresh half alone.
-		expect(hSet).toHaveBeenCalledWith(keyAccess, { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner' })
-		// The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
-		// marketplace-dev-public-authorization for why it is the one field that survives a refresh.
-		//
-		// ⚠️ **…and the key of the access token this rotation just minted**. A session is a pair,
-		// and the refresh half is the one that outlives a request, so it is the half that has to know the
-		// name of the other: the successor's key is re-stamped here on every rotation, which is what lets
-		// the *next* one retire this access token without being handed it in an `Authorization` header.
-		expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE, accessKey: keyAccess })
-		// The tombstone names the account as well as the lineage: a replay is detected after this
-		// rotation deleted the session hash, so this marker is the only place the reuse trail can learn whose
-		// sessions it just ended. Neither field is a credential — the tier is a constant, the id is public.
-		expect(hSet).toHaveBeenCalledWith(tombstoneKey, {
-			familyId: FAMILY_ID,
-			consumedAt: `${NOW}`,
-			_id: OID,
-			tier: 'shopOwner'
-		})
-		// The fourth is the account's session index: the successor filed under the same key the login
-		// created, carrying the lineage's own `originalLogin` rather than the moment of this rotation.
-		expect(hSet).toHaveBeenCalledWith(indexKey, {
-			[newIndexField]: JSON.stringify({ tier: 'shopOwner', mintedAt: LINEAGE.originalLogin })
-		})
-		expect(hSet).toHaveBeenCalledTimes(4)
+    // The access session carries the user payload minus refreshToken and minus the lineage — the
+    // resolver strips the first so the refresh token is never readable from an access-token lookup,
+    // and the other three belong to the refresh half alone.
+    expect(hSet).toHaveBeenCalledWith(keyAccess, { _id: OID, email: 'owner@marketplace.test', tier: 'shopOwner' })
+    // The refresh hash keeps the tier alongside the _id — see setRedisLoginSessionShopOwner in
+    // marketplace-dev-public-authorization for why it is the one field that survives a refresh.
+    //
+    // ⚠️ **…and the key of the access token this rotation just minted**. A session is a pair,
+    // and the refresh half is the one that outlives a request, so it is the half that has to know the
+    // name of the other: the successor's key is re-stamped here on every rotation, which is what lets
+    // the *next* one retire this access token without being handed it in an `Authorization` header.
+    expect(hSet).toHaveBeenCalledWith(keyRefresh, { _id: OID, tier: 'shopOwner', ...LINEAGE, accessKey: keyAccess })
+    // The tombstone names the account as well as the lineage: a replay is detected after this
+    // rotation deleted the session hash, so this marker is the only place the reuse trail can learn whose
+    // sessions it just ended. Neither field is a credential — the tier is a constant, the id is public.
+    expect(hSet).toHaveBeenCalledWith(tombstoneKey, {
+      familyId: FAMILY_ID,
+      consumedAt: `${NOW}`,
+      _id: OID,
+      tier: 'shopOwner'
+    })
+    // The fourth is the account's session index: the successor filed under the same key the login
+    // created, carrying the lineage's own `originalLogin` rather than the moment of this rotation.
+    expect(hSet).toHaveBeenCalledWith(indexKey, {
+      [newIndexField]: JSON.stringify({ tier: 'shopOwner', mintedAt: LINEAGE.originalLogin })
+    })
+    expect(hSet).toHaveBeenCalledTimes(4)
 
-		expect(expire).toHaveBeenCalledWith(keyAccess, ACCESS_EXPIRY)
-		expect(expire).toHaveBeenCalledWith(keyRefresh, REFRESH_EXPIRY)
-		// Both the family set and the tombstone outlive every member they describe: a set that expired
-		// first would leave a live session no revocation could reach, and a tombstone that expired first
-		// would turn a replay back into something indistinguishable from ordinary expiry.
-		expect(expire).toHaveBeenCalledWith(familyKey, REFRESH_EXPIRY)
-		expect(expire).toHaveBeenCalledWith(tombstoneKey, REFRESH_EXPIRY)
+    expect(expire).toHaveBeenCalledWith(keyAccess, ACCESS_EXPIRY)
+    expect(expire).toHaveBeenCalledWith(keyRefresh, REFRESH_EXPIRY)
+    // Both the family set and the tombstone outlive every member they describe: a set that expired
+    // first would leave a live session no revocation could reach, and a tombstone that expired first
+    // would turn a replay back into something indistinguishable from ordinary expiry.
+    expect(expire).toHaveBeenCalledWith(familyKey, REFRESH_EXPIRY)
+    expect(expire).toHaveBeenCalledWith(tombstoneKey, REFRESH_EXPIRY)
 
-		// The pair is filed into the family it inherited, not into a new one.
-		expect(sAdd).toHaveBeenCalledExactlyOnceWith(familyKey, [keyAccess, keyRefresh])
+    // The pair is filed into the family it inherited, not into a new one.
+    expect(sAdd).toHaveBeenCalledExactlyOnceWith(familyKey, [keyAccess, keyRefresh])
 
-		// The rotation metered itself against its own lineage before minting anything, and armed the window
-		// it counts in — an hour, the one window long enough to see a rotation loop.
-		expect(incr).toHaveBeenCalledExactlyOnceWith(rateLimitKey)
-		expect(expire).toHaveBeenCalledWith(rateLimitKey, 3600)
+    // The rotation metered itself against its own lineage before minting anything, and armed the window
+    // it counts in — an hour, the one window long enough to see a rotation loop.
+    expect(incr).toHaveBeenCalledExactlyOnceWith(rateLimitKey)
+    expect(expire).toHaveBeenCalledWith(rateLimitKey, 3600)
 
-		/*
-		 * ⚠️ **The successor's field carries what is LEFT of the cap, not a fresh one**. This
-		 * lineage logged in an hour ago under a thirty-day cap, so the field expires in twenty-nine days and
-		 * twenty-three hours — and the number is the point: rearming the full cap on every rotation would
-		 * keep a session refreshed hourly listed for as long as it kept refreshing, which is exactly the
-		 * absolute cap the index would then be disagreeing with. The key's own TTL is the flat thirty days.
-		 */
-		expect(hExpire).toHaveBeenCalledExactlyOnceWith(indexKey, newIndexField, FIELD_TTL)
-		expect(expire).toHaveBeenCalledWith(indexKey, INDEX_TTL)
-		/*
-		 * ⚠️ **The predecessor's field goes, and it goes AFTER the session key it names**.
-		 * Unfiled first, a still-usable refresh token is listed nowhere for the width of the window between
-		 * the two calls, and a revocation running in it misses the session entirely. Rotation is where that
-		 * window would be widest — it is the one operation that runs on every active session, all day.
-		 */
-		expect(hDel).toHaveBeenCalledExactlyOnceWith(indexKey, oldIndexField)
-		expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
+    /*
+     * ⚠️ **The successor's field carries what is LEFT of the cap, not a fresh one**. This
+     * lineage logged in an hour ago under a thirty-day cap, so the field expires in twenty-nine days and
+     * twenty-three hours — and the number is the point: rearming the full cap on every rotation would
+     * keep a session refreshed hourly listed for as long as it kept refreshing, which is exactly the
+     * absolute cap the index would then be disagreeing with. The key's own TTL is the flat thirty days.
+     */
+    expect(hExpire).toHaveBeenCalledExactlyOnceWith(indexKey, newIndexField, FIELD_TTL)
+    expect(expire).toHaveBeenCalledWith(indexKey, INDEX_TTL)
+    /*
+     * ⚠️ **The predecessor's field goes, and it goes AFTER the session key it names**.
+     * Unfiled first, a still-usable refresh token is listed nowhere for the width of the window between
+     * the two calls, and a revocation running in it misses the session entirely. Rotation is where that
+     * window would be widest — it is the one operation that runs on every active session, all day.
+     */
+    expect(hDel).toHaveBeenCalledExactlyOnceWith(indexKey, oldIndexField)
+    expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
 
-		expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
-		// Two single-key deletes (BCON-08): the access token the call was made with, then the refresh token
-		// it consumed. Two digests land in different cluster slots, so one multi-key del would not survive
-		// a cluster — and there is no third: the raw-token shape is gone.
-		expect(del.mock.calls).toEqual([[presentedAccessKey], [oldKey]])
-		expect(oldKey).not.toContain(OLD_REFRESH)
-		expect(captureException).not.toHaveBeenCalled()
-	})
+    expect(setLoginCookies).toHaveBeenCalledExactlyOnceWith(ctx, REFRESH)
+    // Two single-key deletes (BCON-08): the access token the call was made with, then the refresh token
+    // it consumed. Two digests land in different cluster slots, so one multi-key del would not survive
+    // a cluster — and there is no third: the raw-token shape is gone.
+    expect(del.mock.calls).toEqual([[presentedAccessKey], [oldKey]])
+    expect(oldKey).not.toContain(OLD_REFRESH)
+    expect(captureException).not.toHaveBeenCalled()
+  })
 
-	/*
-	 * The tolerant half of the access-token retirement. A client whose access token expired before it got round to refreshing
-	 * sends no `Authorization` header at all — the ordinary case, not an error — and the rotation then
-	 * deletes nothing extra rather than computing a key from an empty string and deleting whatever that
-	 * happens to hash to.
-	 */
-	it.each([
-		['no Authorization header at all', null],
-		['an empty Authorization header', ''],
-		['a bare Bearer with no token', 'Bearer ']
-	])('rotates without retiring an access token when the call carries %s', async (_label, authorization) => {
-		await expect(refresh.resolve(null, {}, makeCtx(authorization))).resolves.toEqual({ status: true, accessToken: ACCESS })
+  /*
+   * The tolerant half of the access-token retirement. A client whose access token expired before it got round to refreshing
+   * sends no `Authorization` header at all — the ordinary case, not an error — and the rotation then
+   * deletes nothing extra rather than computing a key from an empty string and deleting whatever that
+   * happens to hash to.
+   */
+  it.each([
+    ['no Authorization header at all', null],
+    ['an empty Authorization header', ''],
+    ['a bare Bearer with no token', 'Bearer ']
+  ])('rotates without retiring an access token when the call carries %s', async (_label, authorization) => {
+    await expect(refresh.resolve(null, {}, makeCtx(authorization))).resolves.toEqual({ status: true, accessToken: ACCESS })
 
-		expect(del).toHaveBeenCalledExactlyOnceWith(oldKey)
-	})
+    expect(del).toHaveBeenCalledExactlyOnceWith(oldKey)
+  })
 
-	// Asserted by message, not `instanceof GraphQLError`: vitest inlines and transforms `graphql`
-	// for this file while koa-utils keeps the externalized copy, so the two GraphQLError classes
-	// are not the same object and an instanceof check would fail on a genuinely correct error.
-	it('reports, rolls back both new keys and rethrows when Redis write fails', async () => {
-		hSet.mockRejectedValueOnce(new Error('redis down'))
+  // Asserted by message, not `instanceof GraphQLError`: vitest inlines and transforms `graphql`
+  // for this file while koa-utils keeps the externalized copy, so the two GraphQLError classes
+  // are not the same object and an instanceof check would fail on a genuinely correct error.
+  it('reports, rolls back both new keys and rethrows when Redis write fails', async () => {
+    hSet.mockRejectedValueOnce(new Error('redis down'))
 
-		await expect(refresh.resolve(null, {}, makeCtx())).rejects.toThrow('Internal Server Error')
+    await expect(refresh.resolve(null, {}, makeCtx())).rejects.toThrow('Internal Server Error')
 
-		expect(captureException).toHaveBeenCalled()
-		// Rollback: neither half-written session may survive the failure.
-		expect(del).toHaveBeenCalledWith(keyAccess)
-		expect(del).toHaveBeenCalledWith(keyRefresh)
-		// ⚠️ And nothing else. The rollback undoes what this rotation minted; the session being rotated
-		// is still live, so retiring its access token or tombstoning its refresh token here would end a
-		// session that a retry could have carried on.
-		expect(del.mock.calls.flat()).not.toContain(presentedAccessKey)
-		expect(del.mock.calls.flat()).not.toContain(tombstoneKey)
-		expect(setLoginCookies).not.toHaveBeenCalled()
-	})
+    expect(captureException).toHaveBeenCalled()
+    // Rollback: neither half-written session may survive the failure.
+    expect(del).toHaveBeenCalledWith(keyAccess)
+    expect(del).toHaveBeenCalledWith(keyRefresh)
+    // ⚠️ And nothing else. The rollback undoes what this rotation minted; the session being rotated
+    // is still live, so retiring its access token or tombstoning its refresh token here would end a
+    // session that a retry could have carried on.
+    expect(del.mock.calls.flat()).not.toContain(presentedAccessKey)
+    expect(del.mock.calls.flat()).not.toContain(tombstoneKey)
+    expect(setLoginCookies).not.toHaveBeenCalled()
+  })
 
-	it('rolls back and rethrows when the expiry write fails, after the sessions were stored', async () => {
-		// ⚠️ The first `expire` of the call is the rate limiter arming its own window, and it has
-		// nothing to do with the session. The TTL write this test is about is the second one.
-		expire.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('expire failed'))
+  it('rolls back and rethrows when the expiry write fails, after the sessions were stored', async () => {
+    // ⚠️ The first `expire` of the call is the rate limiter arming its own window, and it has
+    // nothing to do with the session. The TTL write this test is about is the second one.
+    expire.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('expire failed'))
 
-		await expect(refresh.resolve(null, {}, makeCtx())).rejects.toThrow('Internal Server Error')
+    await expect(refresh.resolve(null, {}, makeCtx())).rejects.toThrow('Internal Server Error')
 
-		// A session without a TTL would never expire, so both keys must go.
-		expect(del).toHaveBeenCalledWith(keyAccess)
-		expect(del).toHaveBeenCalledWith(keyRefresh)
-		expect(setLoginCookies).not.toHaveBeenCalled()
-	})
+    // A session without a TTL would never expire, so both keys must go.
+    expect(del).toHaveBeenCalledWith(keyAccess)
+    expect(del).toHaveBeenCalledWith(keyRefresh)
+    expect(setLoginCookies).not.toHaveBeenCalled()
+  })
 })
