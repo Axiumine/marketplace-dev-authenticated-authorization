@@ -22,38 +22,38 @@ import { ITEST_REDIS_KEY } from '../../vitest.keygrip.mts'
  * seeded here" case, seen from a service that is otherwise perfectly configured.
  */
 describe('start() when no keygrip record has been seeded', () => {
-	const realRedisKey = process.env.REDIS_KEY
+  const realRedisKey = process.env.REDIS_KEY
 
-	afterAll(async () => {
-		process.env.REDIS_KEY = realRedisKey
-		await redisClient.close().catch(() => undefined)
-	})
+  afterAll(async () => {
+    process.env.REDIS_KEY = realRedisKey
+    await redisClient.close().catch(() => undefined)
+  })
 
-	it('names the seed command, tears down both datasources, and exits 1', async () => {
-		process.env.REDIS_KEY = `${ITEST_REDIS_KEY}nokeygrip:`
+  it('names the seed command, tears down both datasources, and exits 1', async () => {
+    process.env.REDIS_KEY = `${ITEST_REDIS_KEY}nokeygrip:`
 
-		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
-		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-		try {
-			await expect(start()).resolves.toBeUndefined()
+    try {
+      await expect(start()).resolves.toBeUndefined()
 
-			// The message an admin reads at 3am. It names the key that is empty and the command that
-			// fills it, because "missing" without a next step is a message that costs an outage.
-			const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
-			expect(error.message).toMatch(/^KEYGRIP_RECORD_MISSING: no keygrip key set at "/)
-			expect(error.message).toContain('yarn seed:keygrip')
+      // The message an admin reads at 3am. It names the key that is empty and the command that
+      // fills it, because "missing" without a next step is a message that costs an outage.
+      const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
+      expect(error.message).toMatch(/^KEYGRIP_RECORD_MISSING: no keygrip key set at "/)
+      expect(error.message).toContain('yarn seed:keygrip')
 
-			expect(exit).toHaveBeenCalledWith(1)
+      expect(exit).toHaveBeenCalledWith(1)
 
-			// ⚠️ Nothing is left running. MongoDB and Redis both came up — loadKeygrip runs after their
-			// Promise.all — so this proves the teardown covers the half-booted process, not just the one
-			// that never connected.
-			expect(mongoose.connection.readyState).toBe(0)
-			expect(redisClient.isOpen).toBe(false)
-		} finally {
-			exit.mockRestore()
-			errorLog.mockRestore()
-		}
-	})
+      // ⚠️ Nothing is left running. MongoDB and Redis both came up — loadKeygrip runs after their
+      // Promise.all — so this proves the teardown covers the half-booted process, not just the one
+      // that never connected.
+      expect(mongoose.connection.readyState).toBe(0)
+      expect(redisClient.isOpen).toBe(false)
+    } finally {
+      exit.mockRestore()
+      errorLog.mockRestore()
+    }
+  })
 })
