@@ -20,15 +20,17 @@ image: jetbrains/qodana-js:2026.2
 
 # ── SCA: third-party license audit (Ultimate Plus) ────────────────────────────
 # Scans npm/Yarn deps and surfaces license conflicts as problems. The project is
-# proprietary (package.json "UNLICENSED"), so Qodana's default compatibility
-# matrix already flags copyleft dependencies. Tighten per-project below if needed.
+# GPL-3.0-or-later (package.json "license", LICENSE); Qodana derives this project's
+# license key from that field and checks every dependency against it.
+# Tighten per-project below if needed.
 raiseLicenseProblems: true
 
 # `keys` is THIS project's license, `allowed` the dependency licenses accepted
-# against it. The default matrix for a proprietary project flags every copyleft
-# dep as a Critical — correct for shipped software, wrong here: these services are
-# never distributed, they run on our own hosts behind nginx, so the GPL's
-# distribution trigger is never pulled. Accepted by the project owner.
+# against it. While package.json said "UNLICENSED" the default matrix read this as a
+# proprietary project and flagged every copyleft dep as a Critical — correct for shipped
+# software, wrong here: these services are never distributed, they run on our own hosts
+# behind nginx, so the GPL's distribution trigger is never pulled. Accepted by the
+# project owner, and the explicit list stays so the verdict does not depend on the default.
 #
 # Deliberately NOT `dependencyIgnores: - name: "@axiumine/koa-utils"`. That key
 # drops a package from the whole SCA pass, so a future CVE in it would be silenced
@@ -40,8 +42,8 @@ raiseLicenseProblems: true
 # "…is in the prohibited licenses list with project license 'PROPRIETARY-LICENSE'".
 # Putting "UNLICENSED" here matches no project and the rule silently does nothing.
 #
-# PROPRIETARY-LICENSE is in `allowed` as well so that a proprietary dependency
-# under the same owner as this proprietary project is not read as a conflict.
+# PROPRIETARY-LICENSE stays in `allowed` as well so that a dependency still declaring
+# a proprietary license under the same owner is not read as a conflict.
 # marketplace-common is no longer one of those — it is GPL-3.0-or-later now, and
 # is covered by the GPL entries alongside it.
 #
