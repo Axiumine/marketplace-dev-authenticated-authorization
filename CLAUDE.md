@@ -40,6 +40,7 @@ decision the user has already taken, against. Survey and rejected alternatives:
 - **Never lower a coverage or mutation threshold, and never remove a gate.** Threshold miss → write the
   missing test. Bypasses (`SKIP_QODANA=1`, `--no-verify`) are gate removals: use only when the user says so.
 - Two spaces, not tabs (`useTabs: false`, `tabWidth: 2`). prettier alone enforces it — the shared eslint tab-indent rule is switched off in `eslint.config.js`.
+- `osv-scanner.toml` ignores GHSA-vfj7-8cjw-p6xm (`braces`, dev toolchain only) until 2027-01-15 under ADR-057. The entry expires on purpose and the Scorecard Vulnerabilities check fails again after it — that failure is the review. Delete the entry once a patched `braces` exists.
 - English only — identifiers, comments, fixtures. No exception.
 - **Run `impact({target, repo})` before editing a symbol and `detect_changes()` before committing**;
   `repo:` is mandatory and must be a `marketplace*` registry name. Details: [`AGENTS.md`](./AGENTS.md).
