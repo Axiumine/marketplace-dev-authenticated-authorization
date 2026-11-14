@@ -45,7 +45,7 @@
     "graphql": "^16.14.2",
     "graphql-depth-limit": "^1.1.0",
     "keygrip": "^1.1.0",
-    "koa": "^3.2.1",
+    "koa": "^3.3.0",
     "koa-bodyparser": "^4.4.1",
     "mongodb-client-encryption": "^7.2.1",
     "mongoose": "^9.12.0",
