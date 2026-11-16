@@ -35,7 +35,8 @@ vi.mock('@axiumine/koa-utils/lib/tokens', () => ({
   accessTokenExpiry: () => ACCESS_EXPIRY,
   REFRESH_TOKEN_EXPIRY: REFRESH_EXPIRY
 }))
-vi.mock('@sentry/node', () => ({ captureException }))
+// koa-utils >= 8 reads captureMessage and withScope off @sentry/node as soon as it loads, so the factory must export both.
+vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn(), withScope: vi.fn() }))
 
 const { refresh } = await import('../src/graphQLApi/schema/mutations/refresh.mts')
 
