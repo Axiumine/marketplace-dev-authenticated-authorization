@@ -6020,6 +6020,9 @@ __metadata:
     typescript: "npm:^6.0.3"
     uuid: "npm:^14.0.3"
     vitest: "npm:^4.1.10"
+  dependenciesMeta:
+    mongodb-client-encryption:
+      built: true
   languageName: unknown
   linkType: soft
 
