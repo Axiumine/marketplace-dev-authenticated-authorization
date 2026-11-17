@@ -5249,13 +5249,13 @@ __metadata:
   linkType: hard
 
 "mongodb-client-encryption@npm:^7.2.1":
-  version: 7.2.1
-  resolution: "mongodb-client-encryption@npm:7.2.1"
+  version: 7.2.2
+  resolution: "mongodb-client-encryption@npm:7.2.2"
   dependencies:
     node-addon-api: "npm:^8.6.0"
     node-gyp: "npm:latest"
     prebuild-install: "npm:^7.1.3"
-  checksum: 10c0/d7b3ba6c282e1537dbcbcbdf64bf95fe0083dc1e1b7c19f86f034dc420b248babda44a40059e0bd6eaee5a359e04a5998abb465938dbd8ad58554b2afc319674
+  checksum: 10c0/d020c23375980a30661edea573bacd5537b996f0d6d5d567bbb701d1b843f6436d3ba6bd0283296a6f7d2502bdd76c212f2f9905efe8fe0c4d399fe0af11c712
   languageName: node
   linkType: hard
 
