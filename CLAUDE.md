@@ -11,7 +11,6 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 | what this svc is, what code still lives here and why | [`README.md`](./README.md) |
 | hook internals, gate order, node selection, why the mutation gate is hook-only | [`REPO.md`](./REPO.md) |
 | why the three authz svcs stay three | parent [`docs/decisions/authorization-service-consolidation.md`](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/decisions/authorization-service-consolidation.md) |
-| GitNexus rules, resources, CLI skills, registry name | [`AGENTS.md`](./AGENTS.md) |
 
 Business queries → `marketplace-dev-authenticated-resource` (4026). Logout →
 `marketplace-dev-authenticated-logout` (4030), all three tiers.
@@ -42,8 +41,6 @@ decision the user has already taken, against. Survey and rejected alternatives:
 - Two spaces, not tabs (`useTabs: false`, `tabWidth: 2`). prettier alone enforces it — the shared eslint tab-indent rule is switched off in `eslint.config.js`.
 - `osv-scanner.toml` ignores GHSA-vfj7-8cjw-p6xm (`braces`, dev toolchain only) until 2027-01-15 under ADR-057. The entry expires on purpose and the Scorecard Vulnerabilities check fails again after it — that failure is the review. Delete the entry once a patched `braces` exists.
 - English only — identifiers, comments, fixtures. No exception.
-- **Run `impact({target, repo})` before editing a symbol and `detect_changes()` before committing**;
-  `repo:` is mandatory and must be a `marketplace*` registry name. Details: [`AGENTS.md`](./AGENTS.md).
 
 ## Gates
 
